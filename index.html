@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNAL ARENA FPS - DAYTIME + GUN SELECTOR</title>
+<title>SIGNAL ARENA FPS - REALISTIC MODELS & DYNAMIC OPTICS</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
@@ -26,7 +26,7 @@
   #game { position: relative; width: 100vw; height: 100vh; }
   canvas { display: block; width: 100%; height: 100%; }
 
-  /* --- UI / HUD Overlays --- */
+  /* UI Overlays */
   #damage-vignette {
     position: absolute; inset: 0; pointer-events: none; z-index: 5;
     background: radial-gradient(circle, transparent 50%, rgba(255,42,95,0.7) 100%);
@@ -40,7 +40,7 @@
   }
 
   .card {
-    width: min(500px, 92vw); padding: 32px; background: var(--panel);
+    width: min(520px, 92vw); padding: 32px; background: var(--panel);
     border: 2px solid var(--panel-border);
     box-shadow: 0 10px 40px rgba(0, 120, 255, 0.25);
     clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
@@ -85,7 +85,7 @@
   .note { margin-top: 14px; font-size: 12px; color: var(--dim); line-height: 1.4; font-weight: 600; }
   #status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', sans-serif; font-size: 12px; color: #0284c7; z-index: 25; letter-spacing: 1px; font-weight: 800; }
 
-  /* Tactical Crosshair */
+  /* Crosshair */
   #crosshair {
     position: absolute; top: 50%; left: 50%; width: 28px; height: 28px;
     transform: translate(-50%, -50%); pointer-events: none; z-index: 12;
@@ -98,7 +98,7 @@
   #crosshair .bl { bottom: 0; left: 0; border-right: none; border-top: none; }
   #crosshair .br { bottom: 0; right: 0; border-left: none; border-top: none; }
 
-  /* In-Game HUD */
+  /* HUD */
   #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
   
   #hp-wrap {
@@ -114,7 +114,7 @@
   #hp-bar { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--ok)); width: 100%; transition: width 0.15s ease-out; }
 
   #ammo-wrap {
-    position: absolute; right: 28px; bottom: 28px; width: 160px;
+    position: absolute; right: 28px; bottom: 28px; width: 170px;
     background: var(--panel); padding: 12px 18px; border: 2px solid var(--panel-border);
     backdrop-filter: blur(8px); clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
     text-align: right; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
@@ -123,6 +123,14 @@
   #ammo-val { font-family: 'Orbitron', sans-serif; font-size: 24px; font-weight: 900; color: #0f172a; }
   #ammo-val.low { color: var(--hot); }
   #reload-indicator { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 800; color: var(--amber); letter-spacing: 1px; display: none; margin-top: 2px; }
+
+  #scope-level-badge {
+    position: absolute; bottom: 85px; left: 28px;
+    background: var(--panel); border: 2px solid var(--panel-border);
+    padding: 6px 14px; font-family: 'Orbitron', sans-serif; font-size: 11px;
+    font-weight: 800; color: var(--cyan); letter-spacing: 1px;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  }
 
   #scoreboard {
     position: absolute; top: 24px; right: 24px; background: var(--panel);
@@ -164,7 +172,7 @@
   <div id="start">
     <div class="card">
       <h1>SIGNAL ARENA</h1>
-      <p class="tag">Daylight Arena with Weapon Customization & Dynamic Hipfire Spray.</p>
+      <p class="tag">Daylight Arena with Dynamic Score-Based Scope Zoom & Top-Mounted Optics.</p>
       
       <label for="nameInput">CALLSIGN</label>
       <input id="nameInput" maxlength="14" placeholder="OPERATIVE" autocomplete="off">
@@ -180,7 +188,7 @@
       <div class="swatches" id="swatches"></div>
       
       <button class="start-btn" id="startBtn">ENGAGE ARENA</button>
-      <p class="note">WASD to move · Left Click to fire · Right Click to Aim · R to reload.</p>
+      <p class="note">WASD to move · Left Click to fire · Right Click to Aim · Score increases scope power!</p>
     </div>
   </div>
 
@@ -194,9 +202,10 @@
       </div>
       <div id="hp-bar-bg"><div id="hp-bar"></div></div>
     </div>
+    <div id="scope-level-badge" id="scope-badge">OPTIC: 1.0X REFLEX</div>
     <div id="ammo-wrap">
       <div id="ammo-label">AMMO</div>
-      <div id="ammo-val">12 / 12</div>
+      <div id="ammo-val">24 / 24</div>
       <div id="reload-indicator">RELOADING...</div>
     </div>
     <div id="hint">WASD MOVE · L-CLICK FIRE · R-CLICK AIM · R RELOAD</div>
@@ -210,7 +219,7 @@
 
 <script>
 (function(){
-  // ---------- Supabase Config ----------
+  // Supabase Config
   const SUPABASE_URL = 'https://lqyyddfwjzfpdmfutwow.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxeXlkZGZ3anpmcGRtZnV0d293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NTk1NTgsImV4cCI6MjEwNDEzNTU1OH0.y0wv5sVammCSnG0o7IjJUPzvi7_-SRPFFpgdSPJvdIM';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -230,20 +239,28 @@
   const REGEN_DELAY = 4000;
   const REGEN_PER_SEC = 10;
 
-  // Weapon Types Data
+  // Weapon Specifications
   const WEAPONS = {
-    rifle: { name: 'RIFLE', ammo: 24, damage: 20, cooldown: 160, spray: 0.08, adsPos: new THREE.Vector3(0, -2.6, -6.0) },
-    smg:   { name: 'SMG',   ammo: 32, damage: 14, cooldown: 95,  spray: 0.14, adsPos: new THREE.Vector3(0, -2.6, -6.0) },
-    dmr:   { name: 'DMR',   ammo: 10, damage: 45, cooldown: 380, spray: 0.03, adsPos: new THREE.Vector3(0, -2.6, -6.0) }
+    rifle: { 
+      name: 'RIFLE (AR-15)', ammo: 24, damage: 22, cooldown: 150, spray: 0.08,
+      adsPos: new THREE.Vector3(0, -4.4, -6.5) // ADS brings sight optical axis precisely to (0,0,0)
+    },
+    smg: { 
+      name: 'SMG (VECTOR)', ammo: 32, damage: 15, cooldown: 90, spray: 0.14,
+      adsPos: new THREE.Vector3(0, -3.9, -6.5) 
+    },
+    dmr: { 
+      name: 'DMR (MARKSMAN)', ammo: 10, damage: 48, cooldown: 380, spray: 0.025,
+      adsPos: new THREE.Vector3(0, -4.5, -7.0) 
+    }
   };
   let selectedGunKey = 'rifle';
 
-  // Aim Down Sights Config
+  // Camera Settings
   const NORMAL_FOV = 75;
-  const ADS_FOV = 48;
   const HIP_POS = new THREE.Vector3(6.5, -5.5, -9.0);
 
-  // Cleaned up Map Collision Bounds
+  // Map Wall Geometry Boundaries
   const WALLS = [
     {x:0,y:0,w:WORLD_W,h:32},{x:0,y:WORLD_H-32,w:WORLD_W,h:32},
     {x:0,y:0,w:32,h:WORLD_H},{x:WORLD_W-32,y:0,w:32,h:WORLD_H},
@@ -264,7 +281,6 @@
     swatchWrap.appendChild(d);
   });
 
-  // Gun Selection UI Event Handlers
   const gunBtns = document.querySelectorAll('.gun-btn');
   gunBtns.forEach(btn => {
     btn.onclick = () => {
@@ -274,33 +290,19 @@
     };
   });
 
-  // ---------- Textures Generator ----------
+  // Texture Generators
   function generateGridTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 512; canvas.height = 512;
     const ctx = canvas.getContext('2d');
-    
-    ctx.fillStyle = '#dbe2ef';
-    ctx.fillRect(0, 0, 512, 512);
-
-    ctx.strokeStyle = '#bac7d5';
-    ctx.lineWidth = 4;
+    ctx.fillStyle = '#dbe2ef'; ctx.fillRect(0, 0, 512, 512);
+    ctx.strokeStyle = '#bac7d5'; ctx.lineWidth = 4;
     for(let i=0; i<=512; i+=64) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
     }
-
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.4;
-    for(let i=0; i<=512; i+=128) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
-    }
-
     const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(WORLD_W / 256, WORLD_H / 256);
     return tex;
   }
@@ -309,21 +311,11 @@
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 256;
     const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(0, 0, 256, 256);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(8, 8, 240, 240);
-
-    ctx.strokeStyle = '#0284c7';
-    ctx.lineWidth = 3;
-    ctx.globalAlpha = 0.7;
-    ctx.strokeRect(16, 16, 224, 224);
-
+    ctx.fillStyle = '#64748b'; ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#94a3b8'; ctx.fillRect(8, 8, 240, 240);
+    ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 3; ctx.strokeRect(16, 16, 224, 224);
     const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
     return tex;
   }
 
@@ -331,58 +323,24 @@
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 256;
     const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(0, 0, 256, 256);
-
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(16, 16, 224, 80);
-    ctx.fillRect(16, 112, 224, 128);
-
-    ctx.fillStyle = colorHex;
-    ctx.fillRect(32, 40, 192, 16);
-    ctx.fillRect(32, 140, 192, 20);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    return tex;
+    ctx.fillStyle = '#334155'; ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#cbd5e1'; ctx.fillRect(16, 16, 224, 80); ctx.fillRect(16, 112, 224, 128);
+    ctx.fillStyle = colorHex; ctx.fillRect(32, 40, 192, 16); ctx.fillRect(32, 140, 192, 20);
+    return new THREE.CanvasTexture(canvas);
   }
 
-  // ---------- Three.js Daytime Setup ----------
+  // Scene Setup
   const container = document.getElementById('game');
   const scene = new THREE.Scene();
 
   const skyGeo = new THREE.SphereGeometry(2200, 32, 15);
   const skyMat = new THREE.ShaderMaterial({
-    uniforms: {
-      topColor: { value: new THREE.Color(0x38bdf8) },
-      bottomColor: { value: new THREE.Color(0xf0f9ff) },
-      offset: { value: 40 },
-      exponent: { value: 0.6 }
-    },
-    vertexShader: `
-      varying vec3 vWorldPosition;
-      void main() {
-        vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
-        vWorldPosition = worldPosition.xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 topColor;
-      uniform vec3 bottomColor;
-      uniform float offset;
-      uniform float exponent;
-      varying vec3 vWorldPosition;
-      void main() {
-        float h = normalize( vWorldPosition + offset ).y;
-        gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h, 0.0 ), exponent ), 0.0 ) ), 1.0 );
-      }
-    `,
+    uniforms: { topColor: { value: new THREE.Color(0x38bdf8) }, bottomColor: { value: new THREE.Color(0xf0f9ff) }, offset: { value: 40 }, exponent: { value: 0.6 } },
+    vertexShader: `varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4( position, 1.0 ); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
+    fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vWorldPosition; void main() { float h = normalize( vWorldPosition + offset ).y; gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h, 0.0 ), exponent ), 0.0 ) ), 1.0 ); }`,
     side: THREE.BackSide
   });
-  const sky = new THREE.Mesh(skyGeo, skyMat);
-  scene.add(sky);
-
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
   scene.fog = new THREE.FogExp2(0xe2e8f0, 0.00025);
 
   const camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, 3000);
@@ -400,38 +358,19 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
-  scene.add(ambientLight);
-
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
   const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.5);
   sunLight.position.set(WORLD_W/2 + 600, 1200, WORLD_H/2 - 400);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.width = 2048;
-  sunLight.shadow.mapSize.height = 2048;
-  sunLight.shadow.camera.near = 100;
-  sunLight.shadow.camera.far = 2500;
-  const d = 1200;
-  sunLight.shadow.camera.left = -d;
-  sunLight.shadow.camera.right = d;
-  sunLight.shadow.camera.top = d;
-  sunLight.shadow.camera.bottom = -d;
+  sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048;
   scene.add(sunLight);
 
-  const sunGeo = new THREE.SphereGeometry(60, 16, 16);
-  const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff0b3 });
-  const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-  sunMesh.position.copy(sunLight.position);
-  scene.add(sunMesh);
-
   // Floor & Walls
-  const floorTexture = generateGridTexture();
   const floorGeo = new THREE.PlaneGeometry(WORLD_W, WORLD_H);
-  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.5, metalness: 0.1 });
+  const floorMat = new THREE.MeshStandardMaterial({ map: generateGridTexture(), roughness: 0.5, metalness: 0.1 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(WORLD_W/2, 0, WORLD_H/2);
-  floor.receiveShadow = true;
-  scene.add(floor);
+  floor.rotation.x = -Math.PI / 2; floor.position.set(WORLD_W/2, 0, WORLD_H/2);
+  floor.receiveShadow = true; scene.add(floor);
 
   const wallTexture = generateWallTexture();
   WALLS.forEach(w => {
@@ -439,91 +378,181 @@
     const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture, roughness: 0.4, metalness: 0.3 });
     const wallMesh = new THREE.Mesh(wallGeo, wallMat);
     wallMesh.position.set(w.x + w.w/2, 45, w.y + w.h/2);
-    wallMesh.castShadow = true;
-    wallMesh.receiveShadow = true;
+    wallMesh.castShadow = true; wallMesh.receiveShadow = true;
     scene.add(wallMesh);
   });
 
-  // ---------- Precise 3D Gun Viewmodel ----------
+  // Material Palette for Realistic Guns
+  const darkGunMetal = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25, metalness: 0.85 });
+  const polymerMat   = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6,  metalness: 0.2 });
+  const steelMat      = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.3,  metalness: 0.9 });
+  const glassMat      = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
+  const glowMat       = new THREE.MeshBasicMaterial({ color: myColor });
+
+  // Gun Model Container
   const weaponGroup = new THREE.Group();
   weaponGroup.position.copy(HIP_POS);
-  
-  const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.85 });
-  const gunMetalMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.9 });
-  const accentMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.5, metalness: 0.4 });
-  const glowMat = new THREE.MeshBasicMaterial({ color: myColor });
-
-  // Main Receiver Body (Centered along X = 0)
-  const receiverGeo = new THREE.BoxGeometry(3.2, 4.8, 13);
-  const receiver = new THREE.Mesh(receiverGeo, darkMetalMat);
-  weaponGroup.add(receiver);
-
-  // Rail Base
-  const railGeo = new THREE.BoxGeometry(2.0, 0.6, 16);
-  const rail = new THREE.Mesh(railGeo, accentMat);
-  rail.position.set(0, 2.7, -1.5);
-  weaponGroup.add(rail);
-
-  // Handguard Body
-  const handguardGeo = new THREE.BoxGeometry(2.8, 3.8, 12);
-  const handguard = new THREE.Mesh(handguardGeo, accentMat);
-  handguard.position.set(0, 0.1, -9.5);
-  weaponGroup.add(handguard);
-
-  // Barrel
-  const barrelGeo = new THREE.CylinderGeometry(0.8, 0.8, 18, 16);
-  const barrel = new THREE.Mesh(barrelGeo, gunMetalMat);
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.3, -13);
-  weaponGroup.add(barrel);
-
-  // Muzzle Brake
-  const muzzleGeo = new THREE.CylinderGeometry(1.2, 1.0, 3.5, 12);
-  const muzzle = new THREE.Mesh(muzzleGeo, gunMetalMat);
-  muzzle.rotation.x = Math.PI / 2;
-  muzzle.position.set(0, 0.3, -22);
-  weaponGroup.add(muzzle);
-
-  // --- Perfectly Centered Sight System ---
-  const sightFrameGeo = new THREE.BoxGeometry(2.0, 2.6, 4.0);
-  const sightFrame = new THREE.Mesh(sightFrameGeo, darkMetalMat);
-  sightFrame.position.set(0, 4.3, -1.0);
-  weaponGroup.add(sightFrame);
-
-  const sightGlassGeo = new THREE.BoxGeometry(1.4, 1.8, 0.2);
-  const sightGlassMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65 });
-  const sightGlass = new THREE.Mesh(sightGlassGeo, sightGlassMat);
-  sightGlass.position.set(0, 4.4, -0.5);
-  weaponGroup.add(sightGlass);
-
-  // Glowing Optics Reticle Center
-  const reticleGeo = new THREE.SphereGeometry(0.18, 8, 8);
-  const reticle = new THREE.Mesh(reticleGeo, glowMat);
-  reticle.position.set(0, 4.4, -0.6);
-  weaponGroup.add(reticle);
-
-  // Grip & Stock
-  const gripGeo = new THREE.BoxGeometry(2.2, 6.5, 3.4);
-  const grip = new THREE.Mesh(gripGeo, accentMat);
-  grip.rotation.x = -0.3;
-  grip.position.set(0, -4.0, 4.0);
-  weaponGroup.add(grip);
-
-  const stockGeo = new THREE.BoxGeometry(2.4, 5.2, 8.5);
-  const stock = new THREE.Mesh(stockGeo, darkMetalMat);
-  stock.position.set(0, 0.8, 10.5);
-  weaponGroup.add(stock);
-
-  // Magazine
-  const magGeo = new THREE.BoxGeometry(1.8, 8.5, 3.8);
-  const magMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.6 });
-  const magazine = new THREE.Mesh(magGeo, magMat);
-  magazine.rotation.x = 0.15;
-  magazine.position.set(0, -3.8, -2.0);
-  weaponGroup.add(magazine);
-
   camera.add(weaponGroup);
   scene.add(camera);
+
+  let magazineMesh = null;
+
+  // PROCEDURAL GUN BUILDER FUNCTIONS
+  function buildRifleModel() {
+    weaponGroup.clear();
+
+    // Lower & Upper Receiver
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 12), darkGunMetal);
+    weaponGroup.add(body);
+
+    // Handguard
+    const handguard = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 11), polymerMat);
+    handguard.position.set(0, 0.2, -10.5);
+    weaponGroup.add(handguard);
+
+    // Barrel & Flash Hider
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 14, 12), steelMat);
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.3, -16.5);
+    weaponGroup.add(barrel);
+
+    // STANAG Curved Magazine
+    magazineMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 8.0, 3.2), steelMat);
+    magazineMesh.rotation.x = 0.2; magazineMesh.position.set(0, -3.8, -1.8);
+    weaponGroup.add(magazineMesh);
+
+    // Buffer Tube & Stock
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(2.0, 4.2, 9), polymerMat);
+    stock.position.set(0, 0.5, 9.5);
+    weaponGroup.add(stock);
+
+    // Pistol Grip
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 5.5, 2.8), polymerMat);
+    grip.rotation.x = -0.3; grip.position.set(0, -3.6, 3.2);
+    weaponGroup.add(grip);
+
+    // Top Picatinny Rail
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 18), steelMat);
+    rail.position.set(0, 2.15, -3.0);
+    weaponGroup.add(rail);
+
+    // Top-Mounted Reflex Sight
+    const sightBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 3.2), darkGunMetal);
+    sightBase.position.set(0, 3.0, -1.0);
+    weaponGroup.add(sightBase);
+
+    const sightFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.3), darkGunMetal);
+    sightFrame.position.set(0, 4.4, -0.5);
+    weaponGroup.add(sightFrame);
+
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.1), glassMat);
+    glass.position.set(0, 4.4, -0.5);
+    weaponGroup.add(glass);
+
+    const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), glowMat);
+    reticle.position.set(0, 4.4, -0.55);
+    weaponGroup.add(reticle);
+  }
+
+  function buildSmgModel() {
+    weaponGroup.clear();
+
+    // Compact Vector Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4.8, 9), polymerMat);
+    weaponGroup.add(body);
+
+    // Extended Barrel
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 9, 12), steelMat);
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.8, -8.5);
+    weaponGroup.add(barrel);
+
+    // Straight Stick Magazine
+    magazineMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 9.5, 2.0), steelMat);
+    magazineMesh.rotation.x = -0.15; magazineMesh.position.set(0, -4.2, -2.5);
+    weaponGroup.add(magazineMesh);
+
+    // Skeleton Folding Stock
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.2, 8), steelMat);
+    stock.position.set(0, 0.2, 8.0);
+    weaponGroup.add(stock);
+
+    // Vertical Foregrip
+    const foregrip = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 4.0, 10), polymerMat);
+    foregrip.position.set(0, -3.2, -5.5);
+    weaponGroup.add(foregrip);
+
+    // Top Picatinny Rail
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 12), steelMat);
+    rail.position.set(0, 2.6, -1.5);
+    weaponGroup.add(rail);
+
+    // Top Holographic Hood Sight
+    const holoHood = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 3.5), darkGunMetal);
+    holoHood.position.set(0, 3.7, -1.0);
+    weaponGroup.add(holoHood);
+
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.1), glassMat);
+    glass.position.set(0, 3.9, -1.0);
+    weaponGroup.add(glass);
+
+    const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), glowMat);
+    reticle.position.set(0, 3.9, -1.05);
+    weaponGroup.add(reticle);
+  }
+
+  function buildDmrModel() {
+    weaponGroup.clear();
+
+    // Heavy Receiver Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 4.2, 14), darkGunMetal);
+    weaponGroup.add(body);
+
+    // Long Free-Float Handguard
+    const handguard = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.8, 15), darkGunMetal);
+ handguard.position.set(0, 0.2, -12.5);
+    weaponGroup.add(handguard);
+
+    // Heavy Barrel & Integrated Suppressor
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 18, 16), steelMat);
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.4, -22.0);
+    weaponGroup.add(barrel);
+
+    // Heavy Magazine
+    magazineMesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 6.0, 4.0), steelMat);
+    magazineMesh.position.set(0, -3.6, -1.0);
+    weaponGroup.add(magazineMesh);
+
+    // Precision Sniper Stock
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(2.2, 5.0, 10), polymerMat);
+    stock.position.set(0, 0.6, 11.0);
+    weaponGroup.add(stock);
+
+    // Top Rail
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 20), steelMat);
+    rail.position.set(0, 2.35, -3.0);
+    weaponGroup.add(rail);
+
+    // Top-Mounted High-Power Scope Tube
+    const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 8.5, 16), darkGunMetal);
+    scopeTube.rotation.x = Math.PI / 2; scopeTube.position.set(0, 4.5, -2.0);
+    weaponGroup.add(scopeTube);
+
+    // Scope Mount Rings
+    const ring1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 0.8), steelMat);
+    ring1.position.set(0, 3.4, -4.5);
+    weaponGroup.add(ring1);
+    const ring2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 0.8), steelMat);
+    ring2.position.set(0, 3.4, 0.5);
+    weaponGroup.add(ring2);
+
+    // Scope Lens & Optical Glass
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16), glassMat);
+    glass.position.set(0, 4.5, 2.2);
+    weaponGroup.add(glass);
+
+    const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), glowMat);
+    reticle.position.set(0, 4.5, -2.0);
+    weaponGroup.add(reticle);
+  }
 
   function randSpawn(){
     for(let i=0;i<40;i++){
@@ -568,6 +597,7 @@
   const ammoValEl = document.getElementById('ammo-val');
   const reloadIndEl = document.getElementById('reload-indicator');
   const crosshairEl = document.getElementById('crosshair');
+  const scopeBadgeEl = document.getElementById('scope-level-badge');
 
   function setStatus(t){ statusEl.textContent = t; }
 
@@ -579,7 +609,6 @@
     while(killfeedEl.children.length>5) killfeedEl.removeChild(killfeedEl.firstChild);
   }
 
-  // Pointer Lock & Mouse Listeners
   document.body.addEventListener('mousedown', (e) => {
     if(e.button === 2) isAiming = true;
     if(e.button === 0) tryShoot();
@@ -601,7 +630,7 @@
 
   document.addEventListener('mousemove', (e) => {
     if(!isPointerLocked || !started || me.hp <= 0) return;
-    const sensitivity = isAiming ? 0.0012 : 0.0022;
+    const sensitivity = isAiming ? 0.0010 : 0.0022;
     yaw -= e.movementX * sensitivity;
     pitch -= e.movementY * sensitivity;
     pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
@@ -623,16 +652,12 @@
     reloadIndEl.style.display = 'block';
   }
 
-  // 3D Player Mesh for Opponents
   function createOpponentMesh(colorHex){
     const group = new THREE.Group();
-    const pTex = generatePlayerTexture(colorHex);
-
     const bodyGeo = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 50, 16);
-    const bodyMat = new THREE.MeshStandardMaterial({ map: pTex, roughness: 0.3, metalness: 0.5 });
+    const bodyMat = new THREE.MeshStandardMaterial({ map: generatePlayerTexture(colorHex), roughness: 0.3, metalness: 0.5 });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 25;
-    body.castShadow = true;
+    body.position.y = 25; body.castShadow = true;
     group.add(body);
 
     const visorGeo = new THREE.BoxGeometry(22, 10, 12);
@@ -654,8 +679,8 @@
     ammo--;
     updateAmmoHud();
 
-    // Hipfire Spray Pattern Factor
-    const sprayFactor = isAiming ? 0.008 : activeWeapon.spray;
+    // Hipfire Spread Pattern
+    const sprayFactor = isAiming ? 0.006 : activeWeapon.spray;
     const spreadX = (Math.random() - 0.5) * sprayFactor;
     const spreadY = (Math.random() - 0.5) * sprayFactor;
 
@@ -686,13 +711,11 @@
     scene.add(mesh);
 
     const bullet = {
-      mesh,
-      x, y, z,
+      mesh, x, y, z,
       dx: dirVec.x * BULLET_SPEED,
       dy: dirVec.y * BULLET_SPEED,
       dz: dirVec.z * BULLET_SPEED,
-      life: BULLET_LIFE,
-      mine: isMine
+      life: BULLET_LIFE, mine: isMine
     };
 
     if(isMine) localBullets.push(bullet);
@@ -703,19 +726,13 @@
     for(let i=0;i<count;i++){
       const a = Math.random()*Math.PI*2;
       const s = speed*(0.4+Math.random()*0.6);
-      const geo = new THREE.SphereGeometry(2.5, 4, 4);
-      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true });
-      const mesh = new THREE.Mesh(geo, mat);
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.5, 4, 4), new THREE.MeshBasicMaterial({ color: colorHex, transparent: true }));
       mesh.position.set(x, y, z);
       scene.add(mesh);
 
       particles.push({
-        mesh,
-        vx: Math.cos(a)*s,
-        vy: (Math.random()-0.5)*s,
-        vz: Math.sin(a)*s,
-        life: 1,
-        decay: 0.05 + Math.random()*0.05
+        mesh, vx: Math.cos(a)*s, vy: (Math.random()-0.5)*s, vz: Math.sin(a)*s,
+        life: 1, decay: 0.05 + Math.random()*0.05
       });
     }
   }
@@ -736,7 +753,7 @@
     pushMyState();
   }
 
-  // ---------- Supabase Sync ----------
+  // Supabase Sync
   async function pushMyState(){
     await sb.from('players').upsert({
       id: CLIENT_ID, x: me.x, y: me.y, angle: yaw, hp: Math.max(0, me.hp),
@@ -800,17 +817,34 @@
   }
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  // ---------- Game Loop ----------
+  // Dynamic Scope Zoom Level Logic Based on Kills
+  function getDynamicFov(kills) {
+    if(kills >= 6) return 14;      // 4.0x High Power Zoom Scope
+    else if(kills >= 3) return 26; // 2.5x Tactical Scope
+    return 42;                     // 1.0x Standard Red-Dot
+  }
+
+  function getScopeBadgeText(kills) {
+    if(kills >= 6) return 'OPTIC: 4.0X SNIPER SCOPE';
+    else if(kills >= 3) return 'OPTIC: 2.5X TACTICAL SCOPE';
+    return 'OPTIC: 1.0X REFLEX DOT';
+  }
+
+  // Game Loop
   function update(dt){
     if(!started) return;
 
     const now = Date.now();
 
-    // Smooth ADS Viewmodel Lerp
+    // Lerp weapon into aim view model
     const targetPos = isAiming && !isReloading ? activeWeapon.adsPos : HIP_POS;
     weaponGroup.position.lerp(targetPos, 0.22);
 
-    const targetFov = isAiming ? ADS_FOV : NORMAL_FOV;
+    // Dynamic Score Zoom Calculation
+    const kills = me.kills || 0;
+    const targetFov = isAiming ? getDynamicFov(kills) : NORMAL_FOV;
+    scopeBadgeEl.textContent = getScopeBadgeText(kills);
+
     if(Math.abs(camera.fov - targetFov) > 0.1){
       camera.fov += (targetFov - camera.fov) * 0.22;
       camera.updateProjectionMatrix();
@@ -818,22 +852,22 @@
     
     crosshairEl.style.opacity = isAiming ? '0.1' : '1.0';
 
-    // Reloading Animation Override
-    if(isReloading){
+    // Reload Animation
+    if(isReloading && magazineMesh){
       const progress = (now - reloadStartTime) / RELOAD_TIME;
       if(progress < 0.4){
-        magazine.position.y = -3.8 - (progress / 0.4) * 12;
+        magazineMesh.position.y = -3.8 - (progress / 0.4) * 12;
         weaponGroup.rotation.z = (progress / 0.4) * 0.3;
       } else if(progress < 1.0){
         const subProg = (progress - 0.4) / 0.6;
-        magazine.position.y = -15.8 + subProg * 12;
+        magazineMesh.position.y = -15.8 + subProg * 12;
         weaponGroup.rotation.z = 0.3 * (1 - subProg);
       } else {
         isReloading = false;
         ammo = activeWeapon.ammo;
         updateAmmoHud();
         reloadIndEl.style.display = 'none';
-        magazine.position.y = -3.8;
+        magazineMesh.position.y = -3.8;
         weaponGroup.rotation.z = 0;
       }
     }
@@ -859,13 +893,11 @@
         if(!collidesWalls(me.x, ny, PLAYER_RADIUS)) me.y = ny;
       }
 
-      // Camera Position & Angle
       camera.position.set(me.x, EYE_HEIGHT, me.y);
       camera.rotation.order = "YXZ";
       camera.rotation.y = yaw;
       camera.rotation.x = pitch;
 
-      // Recoil Impulse Effect
       if(!isReloading){
         const sinceShot = me.lastShot ? now - me.lastShot.ts : 999;
         const recoil = sinceShot < 100 ? (1 - sinceShot/100) * (isAiming ? 0.8 : 2.0) : 0;
@@ -873,7 +905,7 @@
       }
     }
 
-    // Local Bullets Loop
+    // Bullets
     localBullets.forEach(b => {
       b.x += b.dx; b.y += b.dy; b.z += b.dz; b.life--;
       b.mesh.position.set(b.x, b.y, b.z);
@@ -917,11 +949,8 @@
       return true;
     });
 
-    // Particle FX
     particles.forEach(p => {
-      p.mesh.position.x += p.vx;
-      p.mesh.position.y += p.vy;
-      p.mesh.position.z += p.vz;
+      p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
       p.vx *= 0.9; p.vy *= 0.9; p.vz *= 0.9;
       p.life -= p.decay;
       p.mesh.material.opacity = Math.max(0, p.life);
@@ -935,7 +964,6 @@
       return true;
     });
 
-    // Opponent Mesh Positions
     Object.keys(otherPlayers).forEach(id => {
       const p = otherPlayers[id];
       if(!p) return;
@@ -948,12 +976,10 @@
       p.mesh.rotation.y = p.angle;
     });
 
-    // Health Regeneration
     if(me.hp > 0 && me.hp < 100 && (now - lastDamageTime) > REGEN_DELAY){
       me.hp = Math.min(100, me.hp + REGEN_PER_SEC * (dt/1000));
     }
 
-    // Cleanup Inactive Opponents
     Object.keys(otherPlayers).forEach(id => {
       const p = otherPlayers[id];
       if(now - Date.parse(p.updated_at||0) > STALE_MS){
@@ -962,7 +988,6 @@
       }
     });
 
-    // Update Health Bar HUD
     const hpBar = document.getElementById('hp-bar');
     const hpNum = document.getElementById('hp-num');
     const MathHp = Math.ceil(Math.max(0, me.hp));
@@ -978,11 +1003,16 @@
     requestAnimationFrame(loop);
   }
 
-  // ---------- Start Game ----------
+  // Start Game Button
   document.getElementById('startBtn').addEventListener('click', async ()=>{
     const nameVal = document.getElementById('nameInput').value.trim().slice(0,14) || 'OPERATIVE';
     activeWeapon = WEAPONS[selectedGunKey] || WEAPONS.rifle;
     ammo = activeWeapon.ammo;
+
+    // Build Chosen 3D Weapon Model
+    if(selectedGunKey === 'smg') buildSmgModel();
+    else if(selectedGunKey === 'dmr') buildDmrModel();
+    else buildRifleModel();
 
     const sp = randSpawn();
     me = { x: sp.x, y: sp.y, angle:0, hp:100, name: nameVal, color: myColor, kills:0, deaths:0, lastShot:null };
