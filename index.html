@@ -112,6 +112,8 @@
   const PLAYER_RADIUS = 17;
   const SYNC_MS = 150;
   const STALE_MS = 9000;
+  const REGEN_DELAY = 4000;
+  const REGEN_PER_SEC = 10;
 
   const WALLS = [
     {x:0,y:0,w:WORLD_W,h:24},{x:0,y:WORLD_H-24,w:WORLD_W,h:24},
@@ -162,6 +164,9 @@
   const seenShotTs = {};
   let localBullets = [];
   let remoteFx = [];
+  let particles = [];
+  let lastDamageTime = 0;
+  let lastFrameTs = 0;
   const killfeedEl = document.getElementById('killfeed');
   const statusEl = document.getElementById('status');
 
@@ -195,6 +200,14 @@
     lastShotTime = now;
     me.lastShot = {x:me.x, y:me.y, angle:me.angle, ts:now};
     localBullets.push({x:me.x, y:me.y, dx:Math.cos(me.angle)*BULLET_SPEED, dy:Math.sin(me.angle)*BULLET_SPEED, life:BULLET_LIFE, mine:true});
+  }
+
+  function spawnParticles(x, y, color, count, speed){
+    for(let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2;
+      const s = speed*(0.4+Math.random()*0.6);
+      particles.push({x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:1, decay: 0.05+Math.random()*0.05, color, size: 1.5+Math.random()*2});
+    }
   }
 
   function respawn(){
@@ -232,6 +245,7 @@
       // authoritative hp comes from DB when we've taken damage via RPC
       if(row.hp < me.hp){
         me.hp = row.hp;
+        lastDamageTime = Date.now();
         if(me.hp <= 0){ me.deaths = (me.deaths||0)+1; respawn(); }
       }
       return;
@@ -256,7 +270,7 @@
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   // ---------- game loop ----------
-  function update(){
+  function update(dt){
     if(!started) return;
     if(me.hp > 0){
       let dx=0, dy=0;
@@ -276,12 +290,16 @@
 
     localBullets.forEach(b=>{
       b.x += b.dx; b.y += b.dy; b.life--;
-      if(collidesWalls(b.x,b.y,4)) b.life = 0;
+      if(collidesWalls(b.x,b.y,4)){
+        spawnParticles(b.x, b.y, '#9aa5b1', 6, 3.5);
+        b.life = 0;
+      }
       for(const key of Object.keys(otherPlayers)){
         const p = otherPlayers[key];
         if(!p || p.hp<=0) continue;
         const d = Math.hypot(p.x-b.x, p.y-b.y);
         if(d < HIT_RADIUS){
+          spawnParticles(b.x, b.y, p.color||'#ff5a3c', 10, 5);
           dealDamage(key, DAMAGE);
           b.life = 0;
           break;
@@ -293,14 +311,28 @@
     remoteFx.forEach(b=>{ b.x+=b.dx; b.y+=b.dy; b.life--; });
     remoteFx = remoteFx.filter(b=>b.life>0);
 
-    // drop stale players from view (didn't clean up on disconnect)
+    particles.forEach(p=>{
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.9; p.vy *= 0.9;
+      p.life -= p.decay;
+    });
+    particles = particles.filter(p=>p.life>0);
+
+    // health regeneration after a few seconds without damage
     const now = Date.now();
+    if(me.hp > 0 && me.hp < 100 && (now - lastDamageTime) > REGEN_DELAY){
+      me.hp = Math.min(100, me.hp + REGEN_PER_SEC * (dt/1000));
+    }
+
+    // drop stale players from view (didn't clean up on disconnect)
     Object.keys(otherPlayers).forEach(id=>{
       const p = otherPlayers[id];
       if(now - Date.parse(p.updated_at||0) > STALE_MS) delete otherPlayers[id];
     });
 
-    document.getElementById('hp-bar').style.width = Math.max(0,me.hp)+'%';
+    const hpBar = document.getElementById('hp-bar');
+    hpBar.style.width = Math.max(0,me.hp)+'%';
+    hpBar.style.filter = (now - lastDamageTime) > REGEN_DELAY && me.hp < 100 ? 'brightness(1.4) saturate(1.3)' : 'none';
   }
 
   function render(){
@@ -317,25 +349,62 @@
     ctx.fillStyle = '#1c2530';
     WALLS.forEach(w=> ctx.fillRect(w.x,w.y,w.w,w.h));
 
-    remoteFx.forEach(b=>{ ctx.fillStyle = b.color||'#fff'; ctx.beginPath(); ctx.arc(b.x,b.y,4,0,7); ctx.fill(); });
-    localBullets.forEach(b=>{ ctx.fillStyle = '#ffe08a'; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,7); ctx.fill(); });
+    function drawTrail(b, color){
+      const tx = b.x - b.dx*1.6, ty = b.y - b.dy*1.6;
+      const grad = ctx.createLinearGradient(tx,ty,b.x,b.y);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(1, color);
+      ctx.strokeStyle = grad; ctx.lineWidth = 3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(b.x,b.y); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(b.x,b.y,3,0,7); ctx.fill();
+    }
+    remoteFx.forEach(b=> drawTrail(b, b.color||'#fff'));
+    localBullets.forEach(b=> drawTrail(b, '#ffe08a'));
+
+    particles.forEach(p=>{
+      ctx.globalAlpha = Math.max(0,p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,7); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
 
     Object.values(otherPlayers).forEach(p=>{
       if(!p || p.hp<=0) return;
-      drawPlayer(p.x,p.y,p.angle,p.color,p.name,p.hp,false);
+      drawPlayer(p.x,p.y,p.angle,p.color,p.name,p.hp, false, p.last_shot ? p.last_shot.ts : 0);
     });
 
-    if(me.hp>0) drawPlayer(me.x,me.y,me.angle,myColor,me.name,me.hp,true);
+    if(me.hp>0) drawPlayer(me.x,me.y,me.angle,myColor,me.name,me.hp, true, me.lastShot ? me.lastShot.ts : 0);
 
     ctx.restore();
   }
 
-  function drawPlayer(x,y,angle,color,name,hp,isMe){
+  const RECOIL_MS = 150, RECOIL_MAX = 9, FLASH_MS = 70;
+
+  function drawPlayer(x,y,angle,color,name,hp,isMe,lastShotTs){
+    const sinceShot = lastShotTs ? Date.now() - lastShotTs : 99999;
+    const recoil = sinceShot < RECOIL_MS ? RECOIL_MAX * (1 - sinceShot/RECOIL_MS) : 0;
+
     ctx.save();
     ctx.translate(x,y); ctx.rotate(angle);
+    // gun, pulled back by recoil
     ctx.fillStyle = '#2c333d';
-    ctx.fillRect(0,-3,26,6);
+    ctx.fillRect(-recoil, -3, 26, 6);
+    // muzzle flash
+    if(sinceShot < FLASH_MS){
+      const t = 1 - sinceShot/FLASH_MS;
+      const gx = 26 - recoil;
+      ctx.globalAlpha = t;
+      ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx+10+Math.random()*4, -5*t);
+      ctx.lineTo(gx+16+Math.random()*4, 0);
+      ctx.lineTo(gx+10+Math.random()*4, 5*t);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
+
     ctx.beginPath(); ctx.arc(x,y,PLAYER_RADIUS,0,7);
     ctx.fillStyle = color; ctx.fill();
     ctx.lineWidth = isMe?3:2; ctx.strokeStyle = isMe? '#fff':'rgba(255,255,255,0.35)'; ctx.stroke();
@@ -347,8 +416,10 @@
     ctx.fillRect(x-18,y-24,36*Math.max(0,hp)/100,4);
   }
 
-  function loop(){
-    update();
+  function loop(ts){
+    const dt = lastFrameTs ? Math.min(50, ts - lastFrameTs) : 16;
+    lastFrameTs = ts;
+    update(dt);
     render();
     requestAnimationFrame(loop);
   }
