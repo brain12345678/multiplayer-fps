@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNAL ARENA</title>
+<title>SIGNAL ARENA 3D</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root{
     --bg: #0a0d12;
@@ -18,7 +19,7 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--bg);overflow:hidden;height:100%;font-family:'Segoe UI',system-ui,sans-serif;}
   #game{position:relative;width:100vw;height:100vh;}
-  canvas{display:block;background:var(--bg);cursor:crosshair;}
+  canvas{display:block;width:100%;height:100%;}
 
   #start{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -61,19 +62,18 @@
 </head>
 <body>
 <div id="game">
-  <canvas id="canvas"></canvas>
   <div id="status"></div>
 
   <div id="start">
     <div class="card">
-      <h1>SIGNAL ARENA</h1>
-      <p class="tag">A shared 2D arena, synced live over Supabase. Everyone who opens this page lands in the same fight — WASD to move, aim with your mouse, click to fire.</p>
+      <h1>SIGNAL ARENA 3D</h1>
+      <p class="tag">A shared 3D arena, synced live over Supabase. WASD to move, aim with your mouse, click/space to fire.</p>
       <label for="nameInput">CALLSIGN</label>
       <input id="nameInput" maxlength="14" placeholder="e.g. Nova" autocomplete="off">
       <label>COLOR</label>
       <div class="swatches" id="swatches"></div>
       <button id="startBtn">ENTER ARENA</button>
-      <p class="note">Your callsign, color, and position are stored in a public Supabase table and visible to anyone else who opens this page while you're connected.</p>
+      <p class="note">Your callsign, color, and 3D position are stored in a public Supabase table and visible to all active players.</p>
     </div>
   </div>
 
@@ -135,10 +135,66 @@
     swatchWrap.appendChild(d);
   });
 
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-  window.addEventListener('resize', resize); resize();
+  // ---------- Three.js Setup ----------
+  const container = document.getElementById('game');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#0a0d12');
+  scene.fog = new THREE.FogExp2('#0a0d12', 0.0006);
+
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambientLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  dirLight.position.set(WORLD_W/2, 1200, WORLD_H/2);
+  dirLight.castShadow = true;
+  dirLight.shadow.camera.top = 1500;
+  dirLight.shadow.camera.bottom = -1500;
+  dirLight.shadow.camera.left = -1500;
+  dirLight.shadow.camera.right = -1500;
+  scene.add(dirLight);
+
+  // Floor
+  const floorGeo = new THREE.PlaneGeometry(WORLD_W, WORLD_H);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x10151d, roughness: 0.8 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(WORLD_W/2, 0, WORLD_H/2);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Floor Grid
+  const gridHelper = new THREE.GridHelper(Math.max(WORLD_W, WORLD_H), 40, 0x1e2733, 0x1e2733);
+  gridHelper.position.set(WORLD_W/2, 1, WORLD_H/2);
+  scene.add(gridHelper);
+
+  // 3D Walls
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1c2530, roughness: 0.5 });
+  WALLS.forEach(w => {
+    const wallGeo = new THREE.BoxGeometry(w.w, 60, w.h);
+    const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+    wallMesh.position.set(w.x + w.w/2, 30, w.y + w.h/2);
+    wallMesh.castShadow = true;
+    wallMesh.receiveShadow = true;
+    scene.add(wallMesh);
+  });
+
+  // Raycasting / Aim Floor Target
+  const raycaster = new THREE.Raycaster();
+  const mouseVec = new THREE.Vector2();
+  const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
   function randSpawn(){
     for(let i=0;i<40;i++){
@@ -160,7 +216,7 @@
   let lastShotTime = 0;
   const keys = {};
   const mouse = {x:0,y:0,down:false};
-  const otherPlayers = {}; // id -> row
+  const otherPlayers = {}; // id -> row & mesh
   const seenShotTs = {};
   let localBullets = [];
   let remoteFx = [];
@@ -180,18 +236,38 @@
     while(killfeedEl.children.length>5) killfeedEl.removeChild(killfeedEl.firstChild);
   }
 
-  // ---------- input ----------
+  // ---------- Input ----------
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()] = true;
     if(e.key === ' '){ e.preventDefault(); tryShoot(); }
   });
   window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
-  canvas.addEventListener('mousemove', e=>{
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
+  window.addEventListener('mousemove', e=>{
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   });
-  canvas.addEventListener('mousedown', ()=>{ mouse.down = true; tryShoot(); });
+  window.addEventListener('mousedown', ()=>{ mouse.down = true; tryShoot(); });
   window.addEventListener('mouseup', ()=>{ mouse.down = false; });
+
+  // 3D Player Factory
+  function createPlayerMesh(colorHex){
+    const group = new THREE.Group();
+    const bodyGeo = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 34, 16);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 17;
+    body.castShadow = true;
+    group.add(body);
+
+    const gunGeo = new THREE.BoxGeometry(6, 6, 26);
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x2c333d });
+    const gun = new THREE.Mesh(gunGeo, gunMat);
+    gun.position.set(10, 22, 12);
+    gun.castShadow = true;
+    group.add(gun);
+
+    return { group, gun };
+  }
 
   function tryShoot(){
     if(!started || me.hp<=0) return;
@@ -199,14 +275,48 @@
     if(now - lastShotTime < SHOT_COOLDOWN) return;
     lastShotTime = now;
     me.lastShot = {x:me.x, y:me.y, angle:me.angle, ts:now};
-    localBullets.push({x:me.x, y:me.y, dx:Math.cos(me.angle)*BULLET_SPEED, dy:Math.sin(me.angle)*BULLET_SPEED, life:BULLET_LIFE, mine:true});
+    
+    createBullet(me.x, me.y, me.angle, '#ffe08a', true);
   }
 
-  function spawnParticles(x, y, color, count, speed){
+  function createBullet(x, z, angle, color, isMine){
+    const geo = new THREE.SphereGeometry(3, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, 22, z);
+    scene.add(mesh);
+
+    const bullet = {
+      mesh,
+      x, y: z,
+      dx: Math.cos(angle)*BULLET_SPEED,
+      dy: Math.sin(angle)*BULLET_SPEED,
+      life: BULLET_LIFE,
+      mine: isMine
+    };
+
+    if(isMine) localBullets.push(bullet);
+    else remoteFx.push(bullet);
+  }
+
+  function spawnParticles(x, z, colorHex, count, speed){
     for(let i=0;i<count;i++){
       const a = Math.random()*Math.PI*2;
       const s = speed*(0.4+Math.random()*0.6);
-      particles.push({x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:1, decay: 0.05+Math.random()*0.05, color, size: 1.5+Math.random()*2});
+      const geo = new THREE.SphereGeometry(2, 4, 4);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, 20, z);
+      scene.add(mesh);
+
+      particles.push({
+        mesh,
+        vx: Math.cos(a)*s,
+        vy: (Math.random()-0.2)*s,
+        vz: Math.sin(a)*s,
+        life: 1,
+        decay: 0.05 + Math.random()*0.05
+      });
     }
   }
 
@@ -240,9 +350,14 @@
   }
 
   function handleRow(row, isDelete){
-    if(isDelete){ delete otherPlayers[row.id]; return; }
+    if(isDelete){
+      if(otherPlayers[row.id]){
+        scene.remove(otherPlayers[row.id].mesh.group);
+        delete otherPlayers[row.id];
+      }
+      return;
+    }
     if(row.id === CLIENT_ID){
-      // authoritative hp comes from DB when we've taken damage via RPC
       if(row.hp < me.hp){
         me.hp = row.hp;
         lastDamageTime = Date.now();
@@ -250,12 +365,19 @@
       }
       return;
     }
-    const prev = otherPlayers[row.id];
+
+    if(!otherPlayers[row.id]){
+      const pMesh = createPlayerMesh(row.color || '#ff5a3c');
+      scene.add(pMesh.group);
+      otherPlayers[row.id] = { ...row, mesh: pMesh };
+    } else {
+      Object.assign(otherPlayers[row.id], row);
+    }
+
     if(row.last_shot && row.last_shot.ts !== seenShotTs[row.id]){
       seenShotTs[row.id] = row.last_shot.ts;
-      remoteFx.push({x:row.last_shot.x, y:row.last_shot.y, dx:Math.cos(row.last_shot.angle)*BULLET_SPEED, dy:Math.sin(row.last_shot.angle)*BULLET_SPEED, life:BULLET_LIFE, color:row.color});
+      createBullet(row.last_shot.x, row.last_shot.y, row.last_shot.angle, row.color || '#ffffff', false);
     }
-    otherPlayers[row.id] = row;
   }
 
   function renderScoreboard(){
@@ -269,9 +391,10 @@
   }
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  // ---------- game loop ----------
+  // ---------- Game Loop ----------
   function update(dt){
     if(!started) return;
+
     if(me.hp > 0){
       let dx=0, dy=0;
       if(keys['w']||keys['arrowup']) dy -= 1;
@@ -284,16 +407,40 @@
         if(!collidesWalls(nx, me.y, PLAYER_RADIUS)) me.x = nx;
         if(!collidesWalls(me.x, ny, PLAYER_RADIUS)) me.y = ny;
       }
-      me.angle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+
+      // Mouse Aim Plane Collision
+      mouseVec.set(mouse.x, mouse.y);
+      raycaster.setFromCamera(mouseVec, camera);
+      const targetVec = new THREE.Vector3();
+      raycaster.ray.intersectPlane(aimPlane, targetVec);
+
+      me.angle = Math.atan2(targetVec.z - me.y, targetVec.x - me.x);
       if(mouse.down) tryShoot();
+
+      // Update Local Player Mesh
+      me.mesh.group.position.set(me.x, 0, me.y);
+      me.mesh.group.rotation.y = -me.angle + Math.PI/2;
+
+      // Update Gun Recoil
+      const sinceShot = me.lastShot ? Date.now() - me.lastShot.ts : 999;
+      const recoil = sinceShot < 150 ? (1 - sinceShot/150) * 4 : 0;
+      me.mesh.gun.position.z = 12 - recoil;
+
+      // Third Person Camera Follow
+      camera.position.set(me.x, 650, me.y + 450);
+      camera.lookAt(me.x, 0, me.y);
     }
 
-    localBullets.forEach(b=>{
+    // Bullets processing
+    localBullets.forEach(b => {
       b.x += b.dx; b.y += b.dy; b.life--;
-      if(collidesWalls(b.x,b.y,4)){
-        spawnParticles(b.x, b.y, '#9aa5b1', 6, 3.5);
+      b.mesh.position.set(b.x, 22, b.y);
+
+      if(collidesWalls(b.x, b.y, 4)){
+        spawnParticles(b.x, b.y, 0x9aa5b1, 6, 3.5);
         b.life = 0;
       }
+
       for(const key of Object.keys(otherPlayers)){
         const p = otherPlayers[key];
         if(!p || p.hp<=0) continue;
@@ -306,147 +453,118 @@
         }
       }
     });
-    localBullets = localBullets.filter(b=>b.life>0 && b.x>0 && b.x<WORLD_W && b.y>0 && b.y<WORLD_H);
 
-    remoteFx.forEach(b=>{ b.x+=b.dx; b.y+=b.dy; b.life--; });
-    remoteFx = remoteFx.filter(b=>b.life>0);
-
-    particles.forEach(p=>{
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.9; p.vy *= 0.9;
-      p.life -= p.decay;
+    // Cleanup Local Bullets
+    localBullets = localBullets.filter(b => {
+      if(b.life <= 0 || b.x<0 || b.x>WORLD_W || b.y<0 || b.y>WORLD_H){
+        scene.remove(b.mesh);
+        return false;
+      }
+      return true;
     });
-    particles = particles.filter(p=>p.life>0);
 
-    // health regeneration after a few seconds without damage
+    // Remote Bullets processing
+    remoteFx.forEach(b => {
+      b.x += b.dx; b.y += b.dy; b.life--;
+      b.mesh.position.set(b.x, 22, b.y);
+    });
+
+    remoteFx = remoteFx.filter(b => {
+      if(b.life <= 0){
+        scene.remove(b.mesh);
+        return false;
+      }
+      return true;
+    });
+
+    // Particle FX
+    particles.forEach(p => {
+      p.mesh.position.x += p.vx;
+      p.mesh.position.y += p.vy;
+      p.mesh.position.z += p.vz;
+      p.vx *= 0.9; p.vy *= 0.9; p.vz *= 0.9;
+      p.life -= p.decay;
+      p.mesh.material.opacity = Math.max(0, p.life);
+    });
+
+    particles = particles.filter(p => {
+      if(p.life <= 0){
+        scene.remove(p.mesh);
+        return false;
+      }
+      return true;
+    });
+
+    // Other Players Rendering
+    Object.keys(otherPlayers).forEach(id => {
+      const p = otherPlayers[id];
+      if(!p) return;
+      if(p.hp <= 0){
+        p.mesh.group.visible = false;
+        return;
+      }
+      p.mesh.group.visible = true;
+      p.mesh.group.position.set(p.x, 0, p.y);
+      p.mesh.group.rotation.y = -p.angle + Math.PI/2;
+    });
+
+    // Health Regeneration
     const now = Date.now();
     if(me.hp > 0 && me.hp < 100 && (now - lastDamageTime) > REGEN_DELAY){
       me.hp = Math.min(100, me.hp + REGEN_PER_SEC * (dt/1000));
     }
 
-    // drop stale players from view (didn't clean up on disconnect)
-    Object.keys(otherPlayers).forEach(id=>{
+    // Stale Player Cleanup
+    Object.keys(otherPlayers).forEach(id => {
       const p = otherPlayers[id];
-      if(now - Date.parse(p.updated_at||0) > STALE_MS) delete otherPlayers[id];
+      if(now - Date.parse(p.updated_at||0) > STALE_MS){
+        scene.remove(p.mesh.group);
+        delete otherPlayers[id];
+      }
     });
 
+    // Update HUD
     const hpBar = document.getElementById('hp-bar');
-    hpBar.style.width = Math.max(0,me.hp)+'%';
+    hpBar.style.width = Math.max(0, me.hp)+'%';
     hpBar.style.filter = (now - lastDamageTime) > REGEN_DELAY && me.hp < 100 ? 'brightness(1.4) saturate(1.3)' : 'none';
-  }
-
-  function render(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.save();
-    const camX = canvas.width/2 - me.x, camY = canvas.height/2 - me.y;
-    ctx.translate(camX, camY);
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth=1;
-    const gs=60;
-    for(let x=0;x<WORLD_W;x+=gs){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
-    for(let y=0;y<WORLD_H;y+=gs){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
-
-    ctx.fillStyle = '#1c2530';
-    WALLS.forEach(w=> ctx.fillRect(w.x,w.y,w.w,w.h));
-
-    function drawTrail(b, color){
-      const tx = b.x - b.dx*1.6, ty = b.y - b.dy*1.6;
-      const grad = ctx.createLinearGradient(tx,ty,b.x,b.y);
-      grad.addColorStop(0, 'rgba(255,255,255,0)');
-      grad.addColorStop(1, color);
-      ctx.strokeStyle = grad; ctx.lineWidth = 3; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(b.x,b.y); ctx.stroke();
-      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(b.x,b.y,3,0,7); ctx.fill();
-    }
-    remoteFx.forEach(b=> drawTrail(b, b.color||'#fff'));
-    localBullets.forEach(b=> drawTrail(b, '#ffe08a'));
-
-    particles.forEach(p=>{
-      ctx.globalAlpha = Math.max(0,p.life);
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,7); ctx.fill();
-      ctx.globalAlpha = 1;
-    });
-
-    Object.values(otherPlayers).forEach(p=>{
-      if(!p || p.hp<=0) return;
-      drawPlayer(p.x,p.y,p.angle,p.color,p.name,p.hp, false, p.last_shot ? p.last_shot.ts : 0);
-    });
-
-    if(me.hp>0) drawPlayer(me.x,me.y,me.angle,myColor,me.name,me.hp, true, me.lastShot ? me.lastShot.ts : 0);
-
-    ctx.restore();
-  }
-
-  const RECOIL_MS = 150, RECOIL_MAX = 9, FLASH_MS = 70;
-
-  function drawPlayer(x,y,angle,color,name,hp,isMe,lastShotTs){
-    const sinceShot = lastShotTs ? Date.now() - lastShotTs : 99999;
-    const recoil = sinceShot < RECOIL_MS ? RECOIL_MAX * (1 - sinceShot/RECOIL_MS) : 0;
-
-    ctx.save();
-    ctx.translate(x,y); ctx.rotate(angle);
-    // gun, pulled back by recoil
-    ctx.fillStyle = '#2c333d';
-    ctx.fillRect(-recoil, -3, 26, 6);
-    // muzzle flash
-    if(sinceShot < FLASH_MS){
-      const t = 1 - sinceShot/FLASH_MS;
-      const gx = 26 - recoil;
-      ctx.globalAlpha = t;
-      ctx.fillStyle = '#ffe9a8';
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx+10+Math.random()*4, -5*t);
-      ctx.lineTo(gx+16+Math.random()*4, 0);
-      ctx.lineTo(gx+10+Math.random()*4, 5*t);
-      ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
-
-    ctx.beginPath(); ctx.arc(x,y,PLAYER_RADIUS,0,7);
-    ctx.fillStyle = color; ctx.fill();
-    ctx.lineWidth = isMe?3:2; ctx.strokeStyle = isMe? '#fff':'rgba(255,255,255,0.35)'; ctx.stroke();
-    ctx.font = '12px Segoe UI, sans-serif'; ctx.textAlign='center';
-    ctx.fillStyle = 'rgba(232,237,243,0.85)';
-    ctx.fillText(name||'?', x, y-28);
-    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(x-18,y-24,36,4);
-    ctx.fillStyle = hp>50?'#3ce6a0':(hp>25?'#ffd166':'#ff5a3c');
-    ctx.fillRect(x-18,y-24,36*Math.max(0,hp)/100,4);
   }
 
   function loop(ts){
     const dt = lastFrameTs ? Math.min(50, ts - lastFrameTs) : 16;
     lastFrameTs = ts;
     update(dt);
-    render();
+    renderer.render(scene, camera);
     requestAnimationFrame(loop);
   }
 
-  // ---------- start ----------
+  // ---------- Start Game ----------
   document.getElementById('startBtn').addEventListener('click', async ()=>{
     const nameVal = document.getElementById('nameInput').value.trim().slice(0,14) || 'Operative';
     const sp = randSpawn();
-    me = { x: sp.x, y: sp.y, angle:0, hp:100, name: nameVal, color: myColor, kills:0, deaths:0, lastShot:null };
+
+    const myMesh = createPlayerMesh(myColor);
+    scene.add(myMesh.group);
+
+    me = { x: sp.x, y: sp.y, angle:0, hp:100, name: nameVal, color: myColor, kills:0, deaths:0, lastShot:null, mesh: myMesh };
+    
     document.getElementById('start').style.display = 'none';
     document.getElementById('hud').style.display = 'block';
     document.getElementById('hp-name').textContent = nameVal;
     started = true;
-    canvas.focus();
     setStatus('connecting...');
 
-    // initial snapshot of who's already here
+    // Fetch Initial Snapshot
     const { data, error } = await sb.from('players').select('*');
     if(error){ setStatus('connection error — check your Supabase URL/key'); }
-    else{
+    else {
       const now = Date.now();
-      (data||[]).forEach(row=>{
-        if(row.id !== CLIENT_ID && now - Date.parse(row.updated_at||0) < STALE_MS) otherPlayers[row.id] = row;
+      (data||[]).forEach(row => {
+        if(row.id !== CLIENT_ID && now - Date.parse(row.updated_at||0) < STALE_MS) handleRow(row, false);
       });
       setStatus('');
     }
 
+    // Subscriptions
     sb.channel('arena-players')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
