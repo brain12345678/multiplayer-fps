@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SIGNAL ARENA</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg: #0a0d12;
-    --grid: #121820;
     --panel: #10151d;
     --edge: #1e2733;
     --hot: #ff5a3c;
@@ -20,7 +20,6 @@
   #game{position:relative;width:100vw;height:100vh;}
   canvas{display:block;background:var(--bg);cursor:crosshair;}
 
-  /* Start overlay */
   #start{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:radial-gradient(circle at 50% 40%, #131a24 0%, #0a0d12 70%);
@@ -28,75 +27,53 @@
   }
   #start .card{
     width:min(420px,88vw);padding:36px 32px;background:var(--panel);
-    border:1px solid var(--edge);border-radius:2px;
-    position:relative;
+    border:1px solid var(--edge);border-radius:2px;position:relative;
   }
-  #start .card::before{
-    content:"";position:absolute;top:0;left:0;width:36px;height:3px;background:var(--hot);
-  }
-  #start h1{
-    font-size:28px;letter-spacing:0.5px;margin:0 0 4px;color:var(--ink);font-weight:700;
-  }
+  #start .card::before{content:"";position:absolute;top:0;left:0;width:36px;height:3px;background:var(--hot);}
+  #start h1{font-size:28px;letter-spacing:0.5px;margin:0 0 4px;color:var(--ink);font-weight:700;}
   #start p.tag{margin:0 0 26px;color:var(--dim);font-size:14px;line-height:1.5;}
   #start label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;}
-  #start input{
-    width:100%;padding:11px 12px;background:#0a0d12;border:1px solid var(--edge);
-    color:var(--ink);font-size:15px;border-radius:1px;margin-bottom:18px;outline:none;
-  }
+  #start input{width:100%;padding:11px 12px;background:#0a0d12;border:1px solid var(--edge);color:var(--ink);font-size:15px;border-radius:1px;margin-bottom:18px;outline:none;}
   #start input:focus{border-color:var(--hot);}
-  #start button{
-    width:100%;padding:13px;background:var(--hot);color:#1a0a05;border:none;
-    font-size:15px;font-weight:700;letter-spacing:0.3px;cursor:pointer;border-radius:1px;
-  }
+  #start button{width:100%;padding:13px;background:var(--hot);color:#1a0a05;border:none;font-size:15px;font-weight:700;letter-spacing:0.3px;cursor:pointer;border-radius:1px;}
   #start button:hover{background:#ff7256;}
   #start .note{margin-top:16px;font-size:12px;color:var(--dim);line-height:1.5;}
   #start .swatches{display:flex;gap:8px;margin-bottom:20px;}
   .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
   .swatch.sel{border-color:#fff;}
+  #status{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--dim);z-index:25;}
 
-  /* HUD */
   #hud{position:absolute;inset:0;pointer-events:none;z-index:10;display:none;font-variant-numeric:tabular-nums;}
   #hp-wrap{position:absolute;left:18px;bottom:18px;width:220px;}
   #hp-name{color:var(--ink);font-size:13px;margin-bottom:6px;font-weight:600;}
   #hp-bar-bg{width:100%;height:14px;background:#1a1f27;border:1px solid var(--edge);}
   #hp-bar{height:100%;background:linear-gradient(90deg,var(--hot),#ff8a3c);width:100%;transition:width 0.15s;}
-  #scoreboard{
-    position:absolute;top:16px;right:16px;background:rgba(16,21,29,0.85);
-    border:1px solid var(--edge);padding:10px 14px;min-width:150px;font-size:13px;color:var(--ink);
-  }
+  #scoreboard{position:absolute;top:16px;right:16px;background:rgba(16,21,29,0.85);border:1px solid var(--edge);padding:10px 14px;min-width:150px;font-size:13px;color:var(--ink);}
   #scoreboard .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim);}
   #scoreboard .row.me{color:var(--ok);}
   #scoreboard h3{margin:0 0 6px;font-size:11px;letter-spacing:0.5px;color:var(--dim);font-weight:600;}
-  #killfeed{
-    position:absolute;left:18px;top:16px;font-size:13px;color:var(--dim);
-    display:flex;flex-direction:column;gap:4px;
-  }
+  #killfeed{position:absolute;left:18px;top:16px;font-size:13px;color:var(--dim);display:flex;flex-direction:column;gap:4px;}
   #killfeed div{background:rgba(16,21,29,0.7);padding:4px 10px;border-left:2px solid var(--hot);}
-  #hint{
-    position:absolute;bottom:18px;right:18px;font-size:12px;color:var(--dim);text-align:right;line-height:1.6;
-  }
-  #respawn{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(10,13,18,0.75);z-index:15;color:var(--ink);font-size:22px;font-weight:700;
-    flex-direction:column;gap:8px;
-  }
+  #hint{position:absolute;bottom:18px;right:18px;font-size:12px;color:var(--dim);text-align:right;line-height:1.6;}
+  #respawn{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,13,18,0.75);z-index:15;color:var(--ink);font-size:22px;font-weight:700;flex-direction:column;gap:8px;}
   #respawn span{font-size:13px;color:var(--dim);font-weight:400;}
 </style>
 </head>
 <body>
 <div id="game">
   <canvas id="canvas"></canvas>
+  <div id="status"></div>
 
   <div id="start">
     <div class="card">
       <h1>SIGNAL ARENA</h1>
-      <p class="tag">A shared 2D arena. Everyone who opens this page lands in the same fight — WASD to move, aim with your mouse, click to fire.</p>
+      <p class="tag">A shared 2D arena, synced live over Supabase. Everyone who opens this page lands in the same fight — WASD to move, aim with your mouse, click to fire.</p>
       <label for="nameInput">CALLSIGN</label>
       <input id="nameInput" maxlength="14" placeholder="e.g. Nova" autocomplete="off">
       <label>COLOR</label>
       <div class="swatches" id="swatches"></div>
       <button id="startBtn">ENTER ARENA</button>
-      <p class="note">Runs on shared storage, not a game server — expect arcade-speed sync (a few updates per second), not twitch-frame precision. Your callsign and position are visible to anyone else who opens this page.</p>
+      <p class="note">Your callsign, color, and position are stored in a public Supabase table and visible to anyone else who opens this page while you're connected.</p>
     </div>
   </div>
 
@@ -118,6 +95,11 @@
 
 <script>
 (function(){
+  // ---------- Supabase config ----------
+  const SUPABASE_URL = 'https://lqyyddfwjzfpdmfutwow.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxeXlkZGZ3anpmcGRtZnV0d293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NTk1NTgsImV4cCI6MjEwNDEzNTU1OH0.y0wv5sVammCSnG0o7IjJUPzvi7_-SRPFFpgdSPJvdIM';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const CLIENT_ID = 'p_' + Math.random().toString(36).slice(2,10);
   const COLORS = ['#ff5a3c','#3ce6a0','#4d9dff','#ffd166','#c77dff','#ff6ba8','#7bed9f','#5ee7ff'];
   const WORLD_W = 2200, WORLD_H = 1400;
@@ -128,7 +110,7 @@
   const HIT_RADIUS = 24;
   const DAMAGE = 18;
   const PLAYER_RADIUS = 17;
-  const SYNC_MS = 160;
+  const SYNC_MS = 150;
   const STALE_MS = 9000;
 
   const WALLS = [
@@ -174,14 +156,16 @@
   let me = null;
   let started = false;
   let lastShotTime = 0;
-  let lastDmgTs = 0;
   const keys = {};
   const mouse = {x:0,y:0,down:false};
-  const otherPlayers = {}; // id -> data
-  const seenShotTs = {}; // id -> last shot ts we animated
-  let localBullets = []; // {x,y,dx,dy,life,mine}
-  let remoteFx = []; // cosmetic bullets from others
+  const otherPlayers = {}; // id -> row
+  const seenShotTs = {};
+  let localBullets = [];
+  let remoteFx = [];
   const killfeedEl = document.getElementById('killfeed');
+  const statusEl = document.getElementById('status');
+
+  function setStatus(t){ statusEl.textContent = t; }
 
   function addKillfeed(text){
     const d = document.createElement('div');
@@ -189,15 +173,6 @@
     killfeedEl.appendChild(d);
     setTimeout(()=>d.remove(), 4200);
     while(killfeedEl.children.length>5) killfeedEl.removeChild(killfeedEl.firstChild);
-  }
-
-  // ---------- storage helpers ----------
-  async function safeGet(key){
-    try{ const r = await window.storage.get(key, true); return r ? r.value : null; }
-    catch(e){ return null; }
-  }
-  async function safeSet(key, value){
-    try{ await window.storage.set(key, value, true); }catch(e){}
   }
 
   // ---------- input ----------
@@ -222,79 +197,51 @@
     localBullets.push({x:me.x, y:me.y, dx:Math.cos(me.angle)*BULLET_SPEED, dy:Math.sin(me.angle)*BULLET_SPEED, life:BULLET_LIFE, mine:true});
   }
 
-  // ---------- respawn ----------
   function respawn(){
     const sp = randSpawn();
     me.x = sp.x; me.y = sp.y; me.hp = 100;
     const rp = document.getElementById('respawn');
     rp.style.display = 'flex';
     setTimeout(()=>{ rp.style.display='none'; }, 900);
+    pushMyState();
   }
 
-  // ---------- damage ----------
+  // ---------- Supabase sync ----------
+  async function pushMyState(){
+    await sb.from('players').upsert({
+      id: CLIENT_ID, x: me.x, y: me.y, angle: me.angle, hp: Math.max(0, me.hp),
+      name: me.name, color: me.color, kills: me.kills||0,
+      last_shot: me.lastShot || null, updated_at: new Date().toISOString()
+    });
+  }
+
   async function dealDamage(targetId, amt){
-    const key = 'dmg:' + targetId;
-    let events = [];
-    const raw = await safeGet(key);
-    if(raw){ try{ events = JSON.parse(raw); }catch(e){ events=[]; } }
-    events.push({amt, from: CLIENT_ID, ts: Date.now()});
-    events = events.slice(-15);
-    await safeSet(key, JSON.stringify(events));
-    // optimistic local kill credit
-    const target = otherPlayers['state:'+targetId];
-    if(target){
-      target.hp = (target.hp||100) - amt;
-      if(target.hp <= 0){
-        me.kills = (me.kills||0) + 1;
-        addKillfeed(`${me.name} eliminated ${target.name||'an operative'}`);
-      }
+    const target = otherPlayers[targetId];
+    const wasAlive = target && target.hp > 0;
+    if(target) target.hp = Math.max(0, (target.hp||100) - amt); // optimistic
+    await sb.rpc('apply_damage', { target_id: targetId, dmg: amt });
+    if(target && wasAlive && target.hp <= 0){
+      me.kills = (me.kills||0) + 1;
+      addKillfeed(`${me.name} eliminated ${target.name||'an operative'}`);
     }
   }
 
-  // ---------- network sync ----------
-  async function syncTick(){
-    if(!started) return;
-    await safeSet('state:'+CLIENT_ID, JSON.stringify({
-      x: me.x, y: me.y, angle: me.angle, hp: Math.max(0,me.hp),
-      name: me.name, color: me.color, kills: me.kills||0, ts: Date.now(),
-      lastShot: me.lastShot || null
-    }));
-
-    let list = null;
-    try{ list = await window.storage.list('state:', true); }catch(e){}
-    if(list && list.keys){
-      for(const k of list.keys){
-        if(k === 'state:'+CLIENT_ID) continue;
-        const raw = await safeGet(k);
-        if(!raw) continue;
-        let data; try{ data = JSON.parse(raw); }catch(e){ continue; }
-        if(Date.now() - data.ts > STALE_MS){ delete otherPlayers[k]; continue; }
-        // cosmetic remote bullet
-        if(data.lastShot && data.lastShot.ts !== seenShotTs[k]){
-          seenShotTs[k] = data.lastShot.ts;
-          remoteFx.push({x:data.lastShot.x, y:data.lastShot.y, dx:Math.cos(data.lastShot.angle)*BULLET_SPEED, dy:Math.sin(data.lastShot.angle)*BULLET_SPEED, life:BULLET_LIFE, color:data.color});
-        }
-        otherPlayers[k] = data;
+  function handleRow(row, isDelete){
+    if(isDelete){ delete otherPlayers[row.id]; return; }
+    if(row.id === CLIENT_ID){
+      // authoritative hp comes from DB when we've taken damage via RPC
+      if(row.hp < me.hp){
+        me.hp = row.hp;
+        if(me.hp <= 0){ me.deaths = (me.deaths||0)+1; respawn(); }
       }
+      return;
     }
-
-    // damage inbox
-    const dmgRaw = await safeGet('dmg:'+CLIENT_ID);
-    if(dmgRaw){
-      let events = []; try{ events = JSON.parse(dmgRaw); }catch(e){}
-      const fresh = events.filter(e=>e.ts > lastDmgTs);
-      if(fresh.length){
-        let total = 0;
-        fresh.forEach(e=>{ total += e.amt; });
-        lastDmgTs = Math.max(...fresh.map(e=>e.ts));
-        if(me.hp > 0){
-          me.hp -= total;
-          if(me.hp <= 0){ me.deaths = (me.deaths||0)+1; respawn(); }
-        }
-      }
+    const prev = otherPlayers[row.id];
+    if(row.last_shot && row.last_shot.ts !== seenShotTs[row.id]){
+      seenShotTs[row.id] = row.last_shot.ts;
+      remoteFx.push({x:row.last_shot.x, y:row.last_shot.y, dx:Math.cos(row.last_shot.angle)*BULLET_SPEED, dy:Math.sin(row.last_shot.angle)*BULLET_SPEED, life:BULLET_LIFE, color:row.color});
     }
-
-    renderScoreboard();
+    otherPlayers[row.id] = row;
   }
 
   function renderScoreboard(){
@@ -327,16 +274,15 @@
       if(mouse.down) tryShoot();
     }
 
-    // local bullets (mine) — hit detection
     localBullets.forEach(b=>{
       b.x += b.dx; b.y += b.dy; b.life--;
       if(collidesWalls(b.x,b.y,4)) b.life = 0;
       for(const key of Object.keys(otherPlayers)){
         const p = otherPlayers[key];
-        if(p.hp<=0) continue;
+        if(!p || p.hp<=0) continue;
         const d = Math.hypot(p.x-b.x, p.y-b.y);
         if(d < HIT_RADIUS){
-          dealDamage(key.replace('state:',''), DAMAGE);
+          dealDamage(key, DAMAGE);
           b.life = 0;
           break;
         }
@@ -347,6 +293,13 @@
     remoteFx.forEach(b=>{ b.x+=b.dx; b.y+=b.dy; b.life--; });
     remoteFx = remoteFx.filter(b=>b.life>0);
 
+    // drop stale players from view (didn't clean up on disconnect)
+    const now = Date.now();
+    Object.keys(otherPlayers).forEach(id=>{
+      const p = otherPlayers[id];
+      if(now - Date.parse(p.updated_at||0) > STALE_MS) delete otherPlayers[id];
+    });
+
     document.getElementById('hp-bar').style.width = Math.max(0,me.hp)+'%';
   }
 
@@ -356,45 +309,36 @@
     const camX = canvas.width/2 - me.x, camY = canvas.height/2 - me.y;
     ctx.translate(camX, camY);
 
-    // grid
     ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth=1;
     const gs=60;
     for(let x=0;x<WORLD_W;x+=gs){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
     for(let y=0;y<WORLD_H;y+=gs){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
 
-    // walls
     ctx.fillStyle = '#1c2530';
     WALLS.forEach(w=> ctx.fillRect(w.x,w.y,w.w,w.h));
 
-    // remote bullets
     remoteFx.forEach(b=>{ ctx.fillStyle = b.color||'#fff'; ctx.beginPath(); ctx.arc(b.x,b.y,4,0,7); ctx.fill(); });
-    // my bullets
     localBullets.forEach(b=>{ ctx.fillStyle = '#ffe08a'; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,7); ctx.fill(); });
 
-    // other players
     Object.values(otherPlayers).forEach(p=>{
-      if(p.hp<=0) return;
+      if(!p || p.hp<=0) return;
       drawPlayer(p.x,p.y,p.angle,p.color,p.name,p.hp,false);
     });
 
-    // me
     if(me.hp>0) drawPlayer(me.x,me.y,me.angle,myColor,me.name,me.hp,true);
 
     ctx.restore();
   }
 
   function drawPlayer(x,y,angle,color,name,hp,isMe){
-    // gun
     ctx.save();
     ctx.translate(x,y); ctx.rotate(angle);
     ctx.fillStyle = '#2c333d';
     ctx.fillRect(0,-3,26,6);
     ctx.restore();
-    // body
     ctx.beginPath(); ctx.arc(x,y,PLAYER_RADIUS,0,7);
     ctx.fillStyle = color; ctx.fill();
     ctx.lineWidth = isMe?3:2; ctx.strokeStyle = isMe? '#fff':'rgba(255,255,255,0.35)'; ctx.stroke();
-    // name + hp
     ctx.font = '12px Segoe UI, sans-serif'; ctx.textAlign='center';
     ctx.fillStyle = 'rgba(232,237,243,0.85)';
     ctx.fillText(name||'?', x, y-28);
@@ -410,7 +354,7 @@
   }
 
   // ---------- start ----------
-  document.getElementById('startBtn').addEventListener('click', ()=>{
+  document.getElementById('startBtn').addEventListener('click', async ()=>{
     const nameVal = document.getElementById('nameInput').value.trim().slice(0,14) || 'Operative';
     const sp = randSpawn();
     me = { x: sp.x, y: sp.y, angle:0, hp:100, name: nameVal, color: myColor, kills:0, deaths:0, lastShot:null };
@@ -419,13 +363,39 @@
     document.getElementById('hp-name').textContent = nameVal;
     started = true;
     canvas.focus();
-    syncTick();
-    setInterval(syncTick, SYNC_MS);
+    setStatus('connecting...');
+
+    // initial snapshot of who's already here
+    const { data, error } = await sb.from('players').select('*');
+    if(error){ setStatus('connection error — check your Supabase URL/key'); }
+    else{
+      const now = Date.now();
+      (data||[]).forEach(row=>{
+        if(row.id !== CLIENT_ID && now - Date.parse(row.updated_at||0) < STALE_MS) otherPlayers[row.id] = row;
+      });
+      setStatus('');
+    }
+
+    sb.channel('arena-players')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' }, p => handleRow(p.old, true))
+      .subscribe();
+
+    await pushMyState();
+    setInterval(pushMyState, SYNC_MS);
+    setInterval(renderScoreboard, 400);
     requestAnimationFrame(loop);
   });
 
   window.addEventListener('beforeunload', ()=>{
-    try{ window.storage.set('state:'+CLIENT_ID, JSON.stringify({x:0,y:0,angle:0,hp:0,name:'',color:'',ts:0}), true); }catch(e){}
+    try{
+      fetch(`${SUPABASE_URL}/rest/v1/players?id=eq.${CLIENT_ID}`, {
+        method: 'DELETE',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        keepalive: true
+      });
+    }catch(e){}
   });
 })();
 </script>
