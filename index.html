@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNAL ARENA FPS - REALISTIC MODELS & DYNAMIC OPTICS</title>
+<title>SIGNAL ARENA FPS - HOLLOW & SEE-THROUGH OPTICS</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
@@ -172,7 +172,7 @@
   <div id="start">
     <div class="card">
       <h1>SIGNAL ARENA</h1>
-      <p class="tag">Daylight Arena with Dynamic Score-Based Scope Zoom & Top-Mounted Optics.</p>
+      <p class="tag">Daylight Arena with Realistic Guns, Dynamic Zoom & Transparent Scope Apertures.</p>
       
       <label for="nameInput">CALLSIGN</label>
       <input id="nameInput" maxlength="14" placeholder="OPERATIVE" autocomplete="off">
@@ -188,7 +188,7 @@
       <div class="swatches" id="swatches"></div>
       
       <button class="start-btn" id="startBtn">ENGAGE ARENA</button>
-      <p class="note">WASD to move · Left Click to fire · Right Click to Aim · Score increases scope power!</p>
+      <p class="note">WASD to move · Left Click to fire · Right Click to Aim · Kills scale scope power!</p>
     </div>
   </div>
 
@@ -202,7 +202,7 @@
       </div>
       <div id="hp-bar-bg"><div id="hp-bar"></div></div>
     </div>
-    <div id="scope-level-badge" id="scope-badge">OPTIC: 1.0X REFLEX</div>
+    <div id="scope-level-badge">OPTIC: 1.0X REFLEX</div>
     <div id="ammo-wrap">
       <div id="ammo-label">AMMO</div>
       <div id="ammo-val">24 / 24</div>
@@ -243,11 +243,11 @@
   const WEAPONS = {
     rifle: { 
       name: 'RIFLE (AR-15)', ammo: 24, damage: 22, cooldown: 150, spray: 0.08,
-      adsPos: new THREE.Vector3(0, -4.4, -6.5) // ADS brings sight optical axis precisely to (0,0,0)
+      adsPos: new THREE.Vector3(0, -4.2, -6.5) 
     },
     smg: { 
       name: 'SMG (VECTOR)', ammo: 32, damage: 15, cooldown: 90, spray: 0.14,
-      adsPos: new THREE.Vector3(0, -3.9, -6.5) 
+      adsPos: new THREE.Vector3(0, -4.0, -6.5) 
     },
     dmr: { 
       name: 'DMR (MARKSMAN)', ammo: 10, damage: 48, cooldown: 380, spray: 0.025,
@@ -386,8 +386,20 @@
   const darkGunMetal = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25, metalness: 0.85 });
   const polymerMat   = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6,  metalness: 0.2 });
   const steelMat      = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.3,  metalness: 0.9 });
-  const glassMat      = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
-  const glowMat       = new THREE.MeshBasicMaterial({ color: myColor });
+  
+  // COMPLETELY TRANSPARENT SIGHT GLASS MATERIAL
+  const clearGlassMat = new THREE.MeshPhysicalMaterial({
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.18,
+    roughness: 0.1,
+    metalness: 0.1,
+    transmission: 0.95,
+    ior: 1.2,
+    side: THREE.DoubleSide
+  });
+
+  const glowMat = new THREE.MeshBasicMaterial({ color: myColor });
 
   // Gun Model Container
   const weaponGroup = new THREE.Group();
@@ -397,7 +409,7 @@
 
   let magazineMesh = null;
 
-  // PROCEDURAL GUN BUILDER FUNCTIONS
+  // PROCEDURAL GUN BUILDER FUNCTIONS (HOLLOW & TRANSPARENT OPTICS)
   function buildRifleModel() {
     weaponGroup.clear();
 
@@ -435,21 +447,32 @@
     rail.position.set(0, 2.15, -3.0);
     weaponGroup.add(rail);
 
-    // Top-Mounted Reflex Sight
-    const sightBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 3.2), darkGunMetal);
-    sightBase.position.set(0, 3.0, -1.0);
+    // HOLLOW TOP-MOUNTED REFLEX SIGHT
+    const sightBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 3.2), darkGunMetal);
+    sightBase.position.set(0, 2.7, -1.0);
     weaponGroup.add(sightBase);
 
-    const sightFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.3), darkGunMetal);
-    sightFrame.position.set(0, 4.4, -0.5);
-    weaponGroup.add(sightFrame);
+    // 4 Border Posts forming a Hollow Viewing Window
+    const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.8, 0.3), darkGunMetal);
+    frameLeft.position.set(-0.75, 3.9, -0.5);
+    weaponGroup.add(frameLeft);
 
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.1), glassMat);
-    glass.position.set(0, 4.4, -0.5);
+    const frameRight = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.8, 0.3), darkGunMetal);
+    frameRight.position.set(0.75, 3.9, -0.5);
+    weaponGroup.add(frameRight);
+
+    const frameTop = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.25, 0.3), darkGunMetal);
+    frameTop.position.set(0, 4.8, -0.5);
+    weaponGroup.add(frameTop);
+
+    // Transparent Glass Pane Inside Sight Window
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.55), clearGlassMat);
+    glass.position.set(0, 3.9, -0.5);
     weaponGroup.add(glass);
 
+    // Floating Reticle Dot
     const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), glowMat);
-    reticle.position.set(0, 4.4, -0.55);
+    reticle.position.set(0, 3.9, -0.52);
     weaponGroup.add(reticle);
   }
 
@@ -485,17 +508,32 @@
     rail.position.set(0, 2.6, -1.5);
     weaponGroup.add(rail);
 
-    // Top Holographic Hood Sight
-    const holoHood = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 3.5), darkGunMetal);
-    holoHood.position.set(0, 3.7, -1.0);
-    weaponGroup.add(holoHood);
+    // HOLLOW HOLOGRAPHIC SIGHT SHROUD
+    const holoBase = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 3.5), darkGunMetal);
+    holoBase.position.set(0, 3.1, -1.0);
+    weaponGroup.add(holoBase);
 
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.1), glassMat);
-    glass.position.set(0, 3.9, -1.0);
+    // Shroud Walls
+    const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.5, 3.5), darkGunMetal);
+    wallL.position.set(-0.7, 4.0, -1.0);
+    weaponGroup.add(wallL);
+
+    const wallR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.5, 3.5), darkGunMetal);
+    wallR.position.set(0.7, 4.0, -1.0);
+    weaponGroup.add(wallR);
+
+    const wallT = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 3.5), darkGunMetal);
+    wallT.position.set(0, 4.75, -1.0);
+    weaponGroup.add(wallT);
+
+    // Transparent Glass Pane
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.3), clearGlassMat);
+    glass.position.set(0, 4.0, -1.0);
     weaponGroup.add(glass);
 
+    // Floating Reticle Dot
     const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), glowMat);
-    reticle.position.set(0, 3.9, -1.05);
+    reticle.position.set(0, 4.0, -1.02);
     weaponGroup.add(reticle);
   }
 
@@ -508,7 +546,7 @@
 
     // Long Free-Float Handguard
     const handguard = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.8, 15), darkGunMetal);
- handguard.position.set(0, 0.2, -12.5);
+    handguard.position.set(0, 0.2, -12.5);
     weaponGroup.add(handguard);
 
     // Heavy Barrel & Integrated Suppressor
@@ -531,9 +569,11 @@
     rail.position.set(0, 2.35, -3.0);
     weaponGroup.add(rail);
 
-    // Top-Mounted High-Power Scope Tube
-    const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 8.5, 16), darkGunMetal);
-    scopeTube.rotation.x = Math.PI / 2; scopeTube.position.set(0, 4.5, -2.0);
+    // HOLLOW CYLINDER HIGH-POWER SCOPE TUBE
+    const scopeTubeGeo = new THREE.CylinderGeometry(1.05, 1.05, 8.5, 24, 1, true); // open-ended hollow tube!
+    const scopeTube = new THREE.Mesh(scopeTubeGeo, darkGunMetal);
+    scopeTube.rotation.x = Math.PI / 2;
+    scopeTube.position.set(0, 4.5, -2.0);
     weaponGroup.add(scopeTube);
 
     // Scope Mount Rings
@@ -544,11 +584,16 @@
     ring2.position.set(0, 3.4, 0.5);
     weaponGroup.add(ring2);
 
-    // Scope Lens & Optical Glass
-    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16), glassMat);
-    glass.position.set(0, 4.5, 2.2);
-    weaponGroup.add(glass);
+    // Transparent Rear & Front Lens Glass
+    const rearGlass = new THREE.Mesh(new THREE.CircleGeometry(0.95, 24), clearGlassMat);
+    rearGlass.position.set(0, 4.5, 2.2);
+    weaponGroup.add(rearGlass);
 
+    const frontGlass = new THREE.Mesh(new THREE.CircleGeometry(0.95, 24), clearGlassMat);
+    frontGlass.position.set(0, 4.5, -6.2);
+    weaponGroup.add(frontGlass);
+
+    // Center Crosshair Reticle Dot
     const reticle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), glowMat);
     reticle.position.set(0, 4.5, -2.0);
     weaponGroup.add(reticle);
