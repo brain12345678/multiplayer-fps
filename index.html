@@ -3,120 +3,188 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNAL ARENA FPS 3D</title>
+<title>SIGNAL ARENA FPS - PRO</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
-  :root{
-    --bg: #0a0d12;
-    --panel: #10151d;
-    --edge: #1e2733;
-    --hot: #ff5a3c;
-    --ok: #3ce6a0;
-    --ink: #e8edf3;
-    --dim: #6b7885;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);overflow:hidden;height:100%;font-family:'Segoe UI',system-ui,sans-serif;}
-  #game{position:relative;width:100vw;height:100vh;}
-  canvas{display:block;width:100%;height:100%;}
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap');
 
-  #start{
-    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 50% 40%, #131a24 0%, #0a0d12 70%);
-    z-index:20;
+  :root {
+    --bg: #05070a;
+    --panel: rgba(10, 15, 24, 0.75);
+    --panel-border: rgba(0, 240, 255, 0.25);
+    --cyan: #00f0ff;
+    --hot: #ff2a5f;
+    --ok: #00ff88;
+    --amber: #ffb700;
+    --ink: #e6f0fa;
+    --dim: #5c6b73;
   }
-  #start .card{
-    width:min(420px,88vw);padding:36px 32px;background:var(--panel);
-    border:1px solid var(--edge);border-radius:2px;position:relative;
-  }
-  #start .card::before{content:"";position:absolute;top:0;left:0;width:36px;height:3px;background:var(--hot);}
-  #start h1{font-size:28px;letter-spacing:0.5px;margin:0 0 4px;color:var(--ink);font-weight:700;}
-  #start p.tag{margin:0 0 26px;color:var(--dim);font-size:14px;line-height:1.5;}
-  #start label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;}
-  #start input{width:100%;padding:11px 12px;background:#0a0d12;border:1px solid var(--edge);color:var(--ink);font-size:15px;border-radius:1px;margin-bottom:18px;outline:none;}
-  #start input:focus{border-color:var(--hot);}
-  #start button{width:100%;padding:13px;background:var(--hot);color:#1a0a05;border:none;font-size:15px;font-weight:700;letter-spacing:0.3px;cursor:pointer;border-radius:1px;}
-  #start button:hover{background:#ff7256;}
-  #start .note{margin-top:16px;font-size:12px;color:var(--dim);line-height:1.5;}
-  #start .swatches{display:flex;gap:8px;margin-bottom:20px;}
-  .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
-  .swatch.sel{border-color:#fff;}
-  #status{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--dim);z-index:25;}
 
-  #crosshair{
-    position:absolute;top:50%;left:50%;width:10px;height:10px;
-    transform:translate(-50%,-50%);pointer-events:none;z-index:12;
-  }
-  #crosshair::before, #crosshair::after{
-    content:'';position:absolute;background:rgba(255,255,255,0.75);
-  }
-  #crosshair::before{top:4px;left:0;width:10px;height:2px;}
-  #crosshair::after{top:0;left:4px;width:2px;height:10px;}
+  * { box-sizing: border-box; user-select: none; }
+  html, body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; height: 100%; font-family: 'Rajdhani', sans-serif; color: var(--ink); }
+  #game { position: relative; width: 100vw; height: 100vh; }
+  canvas { display: block; width: 100%; height: 100%; }
 
-  #hud{position:absolute;inset:0;pointer-events:none;z-index:10;display:none;font-variant-numeric:tabular-nums;}
-  #hp-wrap{position:absolute;left:18px;bottom:18px;width:220px;}
-  #hp-name{color:var(--ink);font-size:13px;margin-bottom:6px;font-weight:600;}
-  #hp-bar-bg{width:100%;height:14px;background:#1a1f27;border:1px solid var(--edge);}
-  #hp-bar{height:100%;background:linear-gradient(90deg,var(--hot),#ff8a3c);width:100%;transition:width 0.15s;}
-  #scoreboard{position:absolute;top:16px;right:16px;background:rgba(16,21,29,0.85);border:1px solid var(--edge);padding:10px 14px;min-width:150px;font-size:13px;color:var(--ink);}
-  #scoreboard .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim);}
-  #scoreboard .row.me{color:var(--ok);}
-  #scoreboard h3{margin:0 0 6px;font-size:11px;letter-spacing:0.5px;color:var(--dim);font-weight:600;}
-  #killfeed{position:absolute;left:18px;top:16px;font-size:13px;color:var(--dim);display:flex;flex-direction:column;gap:4px;}
-  #killfeed div{background:rgba(16,21,29,0.7);padding:4px 10px;border-left:2px solid var(--hot);}
-  #hint{position:absolute;bottom:18px;right:18px;font-size:12px;color:var(--dim);text-align:right;line-height:1.6;}
-  #respawn{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,13,18,0.75);z-index:15;color:var(--ink);font-size:22px;font-weight:700;flex-direction:column;gap:8px;}
-  #respawn span{font-size:13px;color:var(--dim);font-weight:400;}
+  /* --- UI / HUD Overlays --- */
+  #damage-vignette {
+    position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(circle, transparent 60%, rgba(255,42,95,0.6) 100%);
+    opacity: 0; transition: opacity 0.15s ease-out;
+  }
+
+  #start {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 50%, rgba(10,20,35,0.85) 0%, rgba(3,5,8,0.98) 80%);
+    z-index: 30; backdrop-filter: blur(12px);
+  }
+
+  .card {
+    width: min(460px, 92vw); padding: 36px; background: var(--panel);
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.15), inset 0 0 15px rgba(0, 240, 255, 0.05);
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+    position: relative;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; width: 60px; height: 3px; background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan);
+  }
+
+  h1 { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 2px; margin: 0 0 6px; color: #fff; text-shadow: 0 0 12px var(--cyan); }
+  p.tag { color: #8fa0b0; font-size: 15px; line-height: 1.4; margin: 0 0 24px; font-weight: 500; }
+
+  label { display: block; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1.5px; color: var(--cyan); margin-bottom: 8px; font-weight: 600; }
+  input {
+    width: 100%; padding: 12px 16px; background: rgba(5, 10, 18, 0.8); border: 1px solid rgba(0, 240, 255, 0.3);
+    color: #fff; font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 20px; outline: none; transition: all 0.2s;
+  }
+  input:focus { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,240,255,0.4); }
+
+  .swatches { display: flex; gap: 10px; margin-bottom: 24px; }
+  .swatch { width: 30px; height: 30px; cursor: pointer; border: 2px solid transparent; transform: skewX(-10deg); transition: transform 0.15s, border-color 0.15s; }
+  .swatch:hover { transform: skewX(-10deg) scale(1.15); }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 12px currentColor; }
+
+  button {
+    width: 100%; padding: 14px; background: var(--cyan); color: #02060c; border: none;
+    font-family: 'Orbitron', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: 1.5px;
+    cursor: pointer; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    transition: all 0.2s; box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+  }
+  button:hover { background: #fff; box-shadow: 0 0 25px rgba(255, 255, 255, 0.8); transform: translateY(-1deg); }
+
+  .note { margin-top: 18px; font-size: 12px; color: var(--dim); line-height: 1.4; }
+  #status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', sans-serif; font-size: 12px; color: var(--cyan); z-index: 25; letter-spacing: 1px; text-shadow: 0 0 8px var(--cyan); }
+
+  /* Sci-Fi Tactical Crosshair */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%; width: 28px; height: 28px;
+    transform: translate(-50%, -50%); pointer-events: none; z-index: 12;
+  }
+  #crosshair .dot { position: absolute; top: 13px; left: 13px; width: 2px; height: 2px; background: var(--cyan); box-shadow: 0 0 4px var(--cyan); }
+  #crosshair .bracket { position: absolute; border: 1px solid var(--cyan); width: 8px; height: 8px; opacity: 0.7; }
+  #crosshair .tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+  #crosshair .tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+  #crosshair .bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+  #crosshair .br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+  /* In-Game HUD */
+  #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
+  
+  #hp-wrap {
+    position: absolute; left: 28px; bottom: 28px; width: 280px;
+    background: var(--panel); padding: 14px 18px; border: 1px solid var(--panel-border);
+    backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  }
+  #hp-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  #hp-name { font-family: 'Orbitron', sans-serif; font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+  #hp-num { font-family: 'Orbitron', sans-serif; font-size: 18px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+  #hp-bar-bg { width: 100%; height: 10px; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,240,255,0.2); position: relative; overflow: hidden; }
+  #hp-bar { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--ok)); width: 100%; transition: width 0.15s ease-out; box-shadow: 0 0 10px var(--cyan); }
+
+  #scoreboard {
+    position: absolute; top: 24px; right: 24px; background: var(--panel);
+    border: 1px solid var(--panel-border); padding: 14px 18px; min-width: 180px;
+    backdrop-filter: blur(8px); clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  }
+  #scoreboard h3 { margin: 0 0 8px; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--cyan); font-weight: 800; text-transform: uppercase; border-bottom: 1px solid rgba(0,240,255,0.2); padding-bottom: 4px; }
+  #scoreboard .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; font-weight: 600; color: #8fa0b0; }
+  #scoreboard .row.me { color: var(--ok); text-shadow: 0 0 6px rgba(0,255,136,0.4); }
+
+  #killfeed { position: absolute; left: 28px; top: 24px; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 6px; }
+  #killfeed div { background: var(--panel); border: 1px solid var(--panel-border); padding: 6px 12px; border-left: 3px solid var(--hot); backdrop-filter: blur(6px); color: var(--ink); font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.5px; animation: feedFade 0.2s ease-out; }
+
+  #hint { position: absolute; bottom: 28px; right: 28px; font-size: 12px; font-family: 'Orbitron', sans-serif; letter-spacing: 1px; color: var(--dim); text-align: right; line-height: 1.8; background: var(--panel); padding: 8px 14px; border: 1px solid rgba(255,255,255,0.05); }
+
+  #respawn {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(3, 5, 8, 0.85); z-index: 25; color: var(--hot); font-family: 'Orbitron', sans-serif;
+    font-size: 32px; font-weight: 900; letter-spacing: 4px; flex-direction: column; gap: 12px; backdrop-filter: blur(10px);
+  }
+  #respawn span { font-size: 14px; color: var(--dim); letter-spacing: 2px; font-weight: 600; }
+
+  @keyframes feedFade { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 </style>
 </head>
 <body>
 <div id="game">
+  <div id="damage-vignette"></div>
   <div id="status"></div>
-  <div id="crosshair"></div>
+  
+  <div id="crosshair">
+    <div class="dot"></div>
+    <div class="bracket tl"></div>
+    <div class="bracket tr"></div>
+    <div class="bracket bl"></div>
+    <div class="bracket br"></div>
+  </div>
 
   <div id="start">
     <div class="card">
-      <h1>SIGNAL ARENA FPS</h1>
-      <p class="tag">First-person 3D multi-player arena powered by Supabase. WASD to move, Click to lock mouse look, Left Click / Space to fire.</p>
+      <h1>SIGNAL ARENA</h1>
+      <p class="tag">FPS Multiplayer Arena with Procedural Tech Textures & Real-Time Supabase Synchronization.</p>
       <label for="nameInput">CALLSIGN</label>
-      <input id="nameInput" maxlength="14" placeholder="e.g. Nova" autocomplete="off">
-      <label>COLOR</label>
+      <input id="nameInput" maxlength="14" placeholder="OPERATIVE" autocomplete="off">
+      <label>HUD / COLOR PROTOCOL</label>
       <div class="swatches" id="swatches"></div>
-      <button id="startBtn">ENTER ARENA</button>
-      <p class="note">Your callsign, color, and 3D position are stored in a public Supabase table and synced live to other players.</p>
+      <button id="startBtn">ENGAGE ARENA</button>
+      <p class="note">WASD to navigate · Click to lock pointer & view · Left Click / Space to fire pulse weapons.</p>
     </div>
   </div>
 
   <div id="hud">
     <div id="killfeed"></div>
-    <div id="scoreboard"><h3>ARENA</h3><div id="sb-rows"></div></div>
+    <div id="scoreboard"><h3>COMBAT STATS</h3><div id="sb-rows"></div></div>
     <div id="hp-wrap">
-      <div id="hp-name"></div>
+      <div id="hp-header">
+        <div id="hp-name">OPERATIVE</div>
+        <div id="hp-num">100</div>
+      </div>
       <div id="hp-bar-bg"><div id="hp-bar"></div></div>
     </div>
-    <div id="hint">WASD move · mouse look · Left Click fire · ESC unlock</div>
+    <div id="hint">WASD MOVE · MOUSE LOOK · CLICK FIRE · ESC UNLOCK</div>
   </div>
 
   <div id="respawn">
-    <div>ELIMINATED</div>
-    <span id="respawn-sub">respawning...</span>
+    <div>CRITICAL FAILURE</div>
+    <span id="respawn-sub">RECONSTRUCTING SYNC PROTOCOL...</span>
   </div>
 </div>
 
 <script>
 (function(){
-  // ---------- Supabase config ----------
+  // ---------- Supabase Config ----------
   const SUPABASE_URL = 'https://lqyyddfwjzfpdmfutwow.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxeXlkZGZ3anpmcGRtZnV0d293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NTk1NTgsImV4cCI6MjEwNDEzNTU1OH0.y0wv5sVammCSnG0o7IjJUPzvi7_-SRPFFpgdSPJvdIM';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const CLIENT_ID = 'p_' + Math.random().toString(36).slice(2,10);
-  const COLORS = ['#ff5a3c','#3ce6a0','#4d9dff','#ffd166','#c77dff','#ff6ba8','#7bed9f','#5ee7ff'];
+  const COLORS = ['#00f0ff','#ff2a5f','#00ff88','#ffb700','#a855f7','#ff6ba8','#38bdf8','#f43f5e'];
   const WORLD_W = 2200, WORLD_H = 1400;
   const MOVE_SPEED = 5.2;
-  const SHOT_COOLDOWN = 240;
-  const BULLET_SPEED = 18;
+  const SHOT_COOLDOWN = 220;
+  const BULLET_SPEED = 20;
   const BULLET_LIFE = 60;
   const HIT_RADIUS = 26;
   const DAMAGE = 18;
@@ -147,16 +215,78 @@
     swatchWrap.appendChild(d);
   });
 
-  // ---------- Three.js FPS Setup ----------
+  // ---------- Procedural Texture Generator ----------
+  function generateGridTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#0a0e14';
+    ctx.fillRect(0, 0, 512, 512);
+
+    ctx.strokeStyle = '#162232';
+    ctx.lineWidth = 4;
+    for(let i=0; i<=512; i+=64) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    for(let i=0; i<=512; i+=128) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(WORLD_W / 256, WORLD_H / 256);
+    return tex;
+  }
+
+  function generateWallTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#121822';
+    ctx.fillRect(0, 0, 256, 256);
+
+    ctx.fillStyle = '#1c2636';
+    ctx.fillRect(8, 8, 240, 240);
+
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.4;
+    ctx.strokeRect(16, 16, 224, 224);
+
+    ctx.fillStyle = '#00f0ff';
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(20, 20, 8, 8);
+    ctx.fillRect(228, 20, 8, 8);
+    ctx.fillRect(20, 228, 8, 8);
+    ctx.fillRect(228, 228, 8, 8);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  // ---------- Three.js Engine Setup ----------
   const container = document.getElementById('game');
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0a0d12');
-  scene.fog = new THREE.FogExp2('#0a0d12', 0.0008);
+  scene.background = new THREE.Color('#030508');
+  scene.fog = new THREE.FogExp2('#030508', 0.00075);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 2500);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   container.appendChild(renderer.domElement);
 
   window.addEventListener('resize', () => {
@@ -166,32 +296,31 @@
   });
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-  dirLight.position.set(WORLD_W/2, 800, WORLD_H/2);
+  const dirLight = new THREE.DirectionalLight(0x00f0ff, 0.8);
+  dirLight.position.set(WORLD_W/2, 1000, WORLD_H/2);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Floor & Arena
+  // Floor & Textures
+  const floorTexture = generateGridTexture();
   const floorGeo = new THREE.PlaneGeometry(WORLD_W, WORLD_H);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x10151d, roughness: 0.8 });
+  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.4, metalness: 0.6 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(WORLD_W/2, 0, WORLD_H/2);
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const gridHelper = new THREE.GridHelper(Math.max(WORLD_W, WORLD_H), 40, 0x1e2733, 0x1e2733);
-  gridHelper.position.set(WORLD_W/2, 1, WORLD_H/2);
-  scene.add(gridHelper);
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1c2530, roughness: 0.5 });
+  // Walls with Procedural Panel Textures
+  const wallTexture = generateWallTexture();
   WALLS.forEach(w => {
-    const wallGeo = new THREE.BoxGeometry(w.w, 80, w.h);
+    const wallGeo = new THREE.BoxGeometry(w.w, 90, w.h);
+    const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture, roughness: 0.3, metalness: 0.7 });
     const wallMesh = new THREE.Mesh(wallGeo, wallMat);
-    wallMesh.position.set(w.x + w.w/2, 40, w.y + w.h/2);
+    wallMesh.position.set(w.x + w.w/2, 45, w.y + w.h/2);
     wallMesh.castShadow = true;
     wallMesh.receiveShadow = true;
     scene.add(wallMesh);
@@ -199,11 +328,18 @@
 
   // FPS Viewmodel Gun (Attached to Camera)
   const gunGroup = new THREE.Group();
-  const fpsGunGeo = new THREE.BoxGeometry(3, 3, 16);
-  const fpsGunMat = new THREE.MeshStandardMaterial({ color: 0x2c333d });
+  const fpsGunGeo = new THREE.BoxGeometry(3, 3.5, 18);
+  const fpsGunMat = new THREE.MeshStandardMaterial({ color: 0x1a2332, roughness: 0.2, metalness: 0.9 });
   const fpsGun = new THREE.Mesh(fpsGunGeo, fpsGunMat);
-  fpsGun.position.set(5, -4, -8);
+  fpsGun.position.set(6, -4.5, -9);
+  
+  const glowCoreGeo = new THREE.BoxGeometry(1, 1, 12);
+  const glowCoreMat = new THREE.MeshBasicMaterial({ color: myColor });
+  const glowCore = new THREE.Mesh(glowCoreGeo, glowCoreMat);
+  glowCore.position.set(6, -3.5, -9);
+  
   gunGroup.add(fpsGun);
+  gunGroup.add(glowCore);
   camera.add(gunGroup);
   scene.add(camera);
 
@@ -239,6 +375,7 @@
 
   const killfeedEl = document.getElementById('killfeed');
   const statusEl = document.getElementById('status');
+  const vignetteEl = document.getElementById('damage-vignette');
 
   function setStatus(t){ statusEl.textContent = t; }
 
@@ -276,21 +413,21 @@
   window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
   window.addEventListener('mousedown', (e)=>{ if(e.button === 0) tryShoot(); });
 
-  // 3D Player Factory for Remote Opponents
+  // 3D Player Factory for Opponents
   function createOpponentMesh(colorHex){
     const group = new THREE.Group();
-    const bodyGeo = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 48, 16);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3 });
+    const bodyGeo = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, 50, 16);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.6 });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 24;
+    body.position.y = 25;
     body.castShadow = true;
     group.add(body);
 
-    const headGeo = new THREE.SphereGeometry(10, 8, 8);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x10151d });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 44;
-    group.add(head);
+    const visorGeo = new THREE.BoxGeometry(20, 8, 12);
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const visor = new THREE.Mesh(visorGeo, visorMat);
+    visor.position.set(0, 42, -10);
+    group.add(visor);
 
     return group;
   }
@@ -302,15 +439,14 @@
     lastShotTime = now;
     me.lastShot = {x:me.x, y:me.y, angle:yaw, ts:now};
     
-    // Shoot in direction camera is facing
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
 
-    createBullet(camera.position.x, camera.position.y - 2, camera.position.z, dir, '#ffe08a', true);
+    createBullet(camera.position.x, camera.position.y - 2, camera.position.z, dir, myColor, true);
   }
 
   function createBullet(x, y, z, dirVec, color, isMine){
-    const geo = new THREE.SphereGeometry(2.5, 8, 8);
+    const geo = new THREE.SphereGeometry(3, 8, 8);
     const mat = new THREE.MeshBasicMaterial({ color: color });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
@@ -351,6 +487,11 @@
     }
   }
 
+  function triggerDamageFx(){
+    vignetteEl.style.opacity = '1';
+    setTimeout(()=>{ vignetteEl.style.opacity = '0'; }, 200);
+  }
+
   function respawn(){
     const sp = randSpawn();
     me.x = sp.x; me.y = sp.y; me.hp = 100;
@@ -376,7 +517,7 @@
     await sb.rpc('apply_damage', { target_id: targetId, dmg: amt });
     if(target && wasAlive && target.hp <= 0){
       me.kills = (me.kills||0) + 1;
-      addKillfeed(`${me.name} eliminated ${target.name||'an operative'}`);
+      addKillfeed(`${me.name} ELIMINATED ${target.name||'OPERATIVE'}`);
     }
   }
 
@@ -392,13 +533,14 @@
       if(row.hp < me.hp){
         me.hp = row.hp;
         lastDamageTime = Date.now();
+        triggerDamageFx();
         if(me.hp <= 0){ me.deaths = (me.deaths||0)+1; respawn(); }
       }
       return;
     }
 
     if(!otherPlayers[row.id]){
-      const pMesh = createOpponentMesh(row.color || '#ff5a3c');
+      const pMesh = createOpponentMesh(row.color || '#00f0ff');
       scene.add(pMesh);
       otherPlayers[row.id] = { ...row, mesh: pMesh };
     } else {
@@ -414,7 +556,7 @@
 
   function renderScoreboard(){
     const rows = document.getElementById('sb-rows');
-    const all = [{name: me.name+' (you)', kills: me.kills||0, me:true}];
+    const all = [{name: me.name+' (YOU)', kills: me.kills||0, me:true}];
     Object.values(otherPlayers).forEach(p=> all.push({name:p.name||'???', kills:p.kills||0, me:false}));
     all.sort((a,b)=>b.kills-a.kills);
     rows.innerHTML = all.slice(0,8).map(p=>
@@ -428,7 +570,6 @@
     if(!started) return;
 
     if(me.hp > 0){
-      // First person movement relative to current view facing
       let forward = 0, side = 0;
       if(keys['w']||keys['arrowup']) forward += 1;
       if(keys['s']||keys['arrowdown']) forward -= 1;
@@ -454,19 +595,20 @@
       camera.rotation.y = yaw;
       camera.rotation.x = pitch;
 
-      // Viewmodel recoil animation
+      // Gun Recoil Viewmodel
       const sinceShot = me.lastShot ? Date.now() - me.lastShot.ts : 999;
-      const recoil = sinceShot < 120 ? (1 - sinceShot/120) * 1.8 : 0;
-      fpsGun.position.z = -8 + recoil;
+      const recoil = sinceShot < 120 ? (1 - sinceShot/120) * 2 : 0;
+      fpsGun.position.z = -9 + recoil;
+      glowCore.position.z = -9 + recoil;
     }
 
-    // Local Bullets
+    // Bullets processing
     localBullets.forEach(b => {
       b.x += b.dx; b.y += b.dy; b.z += b.dz; b.life--;
       b.mesh.position.set(b.x, b.y, b.z);
 
-      if(collidesWalls(b.x, b.z, 4) || b.y <= 0 || b.y >= 80){
-        spawnParticles(b.x, b.y, b.z, 0x9aa5b1, 6, 3.5);
+      if(collidesWalls(b.x, b.z, 4) || b.y <= 0 || b.y >= 90){
+        spawnParticles(b.x, b.y, b.z, myColor, 6, 3.5);
         b.life = 0;
       }
 
@@ -474,8 +616,8 @@
         const p = otherPlayers[key];
         if(!p || p.hp<=0) continue;
         const d = Math.hypot(p.x-b.x, p.y-b.z);
-        if(d < HIT_RADIUS && Math.abs(b.y - 24) < 30){
-          spawnParticles(b.x, b.y, b.z, p.color||'#ff5a3c', 10, 5);
+        if(d < HIT_RADIUS && Math.abs(b.y - 25) < 35){
+          spawnParticles(b.x, b.y, b.z, p.color||'#00f0ff', 10, 5);
           dealDamage(key, DAMAGE);
           b.life = 0;
           break;
@@ -491,7 +633,6 @@
       return true;
     });
 
-    // Remote Bullets
     remoteFx.forEach(b => {
       b.x += b.dx; b.y += b.dy; b.z += b.dz; b.life--;
       b.mesh.position.set(b.x, b.y, b.z);
@@ -505,7 +646,7 @@
       return true;
     });
 
-    // Particles
+    // Particle FX
     particles.forEach(p => {
       p.mesh.position.x += p.vx;
       p.mesh.position.y += p.vy;
@@ -523,7 +664,7 @@
       return true;
     });
 
-    // Opponent Mesh Position Updates
+    // Opponent Position Sync
     Object.keys(otherPlayers).forEach(id => {
       const p = otherPlayers[id];
       if(!p) return;
@@ -542,7 +683,7 @@
       me.hp = Math.min(100, me.hp + REGEN_PER_SEC * (dt/1000));
     }
 
-    // Stale Cleanup
+    // Cleanup Stale
     Object.keys(otherPlayers).forEach(id => {
       const p = otherPlayers[id];
       if(now - Date.parse(p.updated_at||0) > STALE_MS){
@@ -553,8 +694,10 @@
 
     // Update HUD
     const hpBar = document.getElementById('hp-bar');
-    hpBar.style.width = Math.max(0, me.hp)+'%';
-    hpBar.style.filter = (now - lastDamageTime) > REGEN_DELAY && me.hp < 100 ? 'brightness(1.4) saturate(1.3)' : 'none';
+    const hpNum = document.getElementById('hp-num');
+    const MathHp = Math.ceil(Math.max(0, me.hp));
+    hpBar.style.width = MathHp + '%';
+    hpNum.textContent = MathHp;
   }
 
   function loop(ts){
@@ -567,20 +710,20 @@
 
   // ---------- Start Game ----------
   document.getElementById('startBtn').addEventListener('click', async ()=>{
-    const nameVal = document.getElementById('nameInput').value.trim().slice(0,14) || 'Operative';
+    const nameVal = document.getElementById('nameInput').value.trim().slice(0,14) || 'OPERATIVE';
     const sp = randSpawn();
 
     me = { x: sp.x, y: sp.y, angle:0, hp:100, name: nameVal, color: myColor, kills:0, deaths:0, lastShot:null };
+    glowCoreMat.color.set(myColor);
     
     document.getElementById('start').style.display = 'none';
     document.getElementById('hud').style.display = 'block';
     document.getElementById('hp-name').textContent = nameVal;
     started = true;
-    setStatus('connecting...');
+    setStatus('SYNCING NETWORK...');
 
-    // Fetch Initial Snapshot
     const { data, error } = await sb.from('players').select('*');
-    if(error){ setStatus('connection error — check your Supabase URL/key'); }
+    if(error){ setStatus('CONNECTION ERROR - VERIFY SUPABASE KEYS'); }
     else {
       const now = Date.now();
       (data||[]).forEach(row => {
@@ -589,7 +732,6 @@
       setStatus('');
     }
 
-    // Subscriptions
     sb.channel('arena-players')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' }, p => handleRow(p.new, false))
